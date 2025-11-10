@@ -1,0 +1,103 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Override Tailwind's default font variables */
+  --font-sans: 'Montserrat', sans-serif;
+  --default-font-family: 'Montserrat', sans-serif;
+  
+  /* Your custom colors */
+  --color-pink: #FFD5EC;
+  --color-purple: #CEAFEA;
+  --color-blue: #BFD4FF;
+  --color-green: #D5FFE8;
+  --color-yellow: #FFF2CD;
+  --color-light-purple: #F0E0FF;
+  --color-light-blue: #D4E2FF;
+  --color-light-green: #E0FFF2;
+  --color-light-yellow: #FEFFE9;
+  --color-muted-purple: #89769F;
+  --color-dark-purple: #6C46AC;
+  --color-dark-yellow: #FFAA32;
+  --color-red: #F06464;
+  --color-dark-grey: #424242;
+  --color-white: #FFFFFF;
+
+  /* Custom font sizes with weights */
+  --text-header: 20px;
+  --text-big-text: 16px;
+  --text-button-text: 14px;
+  --text-fill-text: 12px;
+}
+
+/* Create custom utility classes with your specific font sizes and weights */
+.text-header {
+  font-size: var(--text-header);
+  font-weight: 700; /* Bold */
+  line-height: 1.2;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.text-big-text {
+  font-size: var(--text-big-text);
+  font-weight: 600; /* Semibold */
+  line-height: 1.4;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.text-button-text {
+  font-size: var(--text-button-text);
+  font-weight: 600; /* Semibold */
+  line-height: 1.4;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.text-fill-text {
+  font-size: var(--text-fill-text);
+  font-weight: 500; /* Medium */
+  line-height: 1.4;
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* Color utility classes */
+.bg-pink { background-color: var(--color-pink); }
+.bg-purple { background-color: var(--color-purple); }
+.bg-blue { background-color: var(--color-blue); }
+.bg-green { background-color: var(--color-green); }
+.bg-yellow { background-color: var(--color-yellow); }
+.bg-light-purple { background-color: var(--color-light-purple); }
+.bg-light-blue { background-color: var(--color-light-blue); }
+.bg-light-green { background-color: var(--color-light-green); }
+.bg-light-yellow { background-color: var(--color-light-yellow); }
+.bg-muted-purple { background-color: var(--color-muted-purple); }
+.bg-dark-purple { background-color: var(--color-dark-purple); }
+.bg-dark-yellow { background-color: var(--color-dark-yellow); }
+.bg-red { background-color: var(--color-red); }
+.text-dark-grey { color: var(--color-dark-grey); }
+.text-white { color: var(--color-white); }
+
+/* Font utility class */
+.font-montserrat {
+  font-family: 'Montserrat', sans-serif;
+}
+
+.bg-gradient-pink-to-purple {
+  background: linear-gradient(to bottom, var(--color-pink), var(--color-purple)) !important;
+}
+
+.bg-gradient-purple-to-blue {
+  background: linear-gradient(to bottom, var(--color-purple), var(--color-blue)) !important;
+}
+
+.bg-gradient-lightpurple-to-lightblue {
+  background: linear-gradient(to bottom, var(--color-light-purple), var(--color-light-blue)) !important;
+}
+
+.bg-gradient-yellow-to-pink {
+  background: linear-gradient(to bottom, var(--color-yellow), var(--color-pink)) !important;
+}
+
+.bg-gradient-green-to-blue {
+  background: linear-gradient(to bottom, var(--color-green), var(--color-blue)) !important;
+}

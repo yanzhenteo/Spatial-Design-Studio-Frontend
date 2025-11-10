@@ -1,0 +1,185 @@
+// src/pages/ChatPage.tsx
+import { motion } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import ChatBubble from '../components/ChatBubble';
+import MessageInput from '../components/MessageInput';
+
+interface Message {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
+}
+
+interface ChatPageProps {
+  onBack?: () => void;
+  onNext?: () => void;
+}
+
+function ChatPage({ onBack, onNext }: ChatPageProps) {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      text: "Hello! I'm here to help you create wonderful memories. What would you like to talk about today?",
+      isUser: false,
+      timestamp: new Date()
+    }
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (messageText: string) => {
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: messageText,
+      isUser: true,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+
+    // TODO: Connect to backend here
+    try {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Add bot response (mock for now)
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `I received your message: "${messageText}". This is where the AI response will go.`,
+        isUser: false,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I'm having trouble connecting right now. Please try again.",
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMicClick = () => {
+    setIsRecording(!isRecording);
+    console.log('Microphone clicked, recording:', !isRecording);
+    // TODO: Add speech-to-text logic here
+  };
+
+  return (
+    <motion.div
+      key="chat-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: "easeInOut" }}
+      className="min-h-screen bg-gradient-lightpurple-to-lightblue flex flex-col"
+    >
+      {/* Header */}
+      <div className="bg-white shadow-sm p-4 flex items-center justify-between">
+        {/* Back Button */}
+        <button
+          onClick={onBack}
+          className="text-muted-purple text-button-text flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+
+        {/* Title */}
+        <h1 className="text-header text-dark-grey">Memory Bot</h1>
+
+        {/* Next Button */}
+        <button
+          onClick={onNext}
+          className="text-muted-purple text-button-text flex items-center gap-2"
+        >
+          Next
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.map((message) => (
+          <ChatBubble
+            key={message.id}
+            message={message.text}
+            isUser={message.isUser}
+            timestamp={message.timestamp}
+          />
+        ))}
+        
+        {isLoading && (
+          <div className="flex justify-start mb-4">
+            <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-4 max-w-[70%]">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-dark-grey rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-dark-grey rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-dark-grey rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+    <div className="bg-white border-t border-gray-200 p-4">
+        <div className="flex gap-3 items-center">
+            {/* Microphone Button */}
+            <button
+            onClick={handleMicClick}
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
+                isRecording 
+                ? 'bg-red text-white animate-pulse' 
+                : 'bg-light-purple text-muted-purple'
+            }`}
+            >
+            <svg 
+                className="w-5 h-5" 
+                fill={isRecording ? "currentColor" : "none"} 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+            >
+                {isRecording ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                )}
+            </svg>
+            </button>
+
+            {/* Message Input - takes remaining space */}
+            <div className="flex-1">
+            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading} />
+            </div>
+        </div>
+    </div>
+    </motion.div>
+  );
+}
+
+export default ChatPage;
