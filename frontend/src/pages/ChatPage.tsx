@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
 import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
-import { generateQuestionsForTopics } from '../utils/aiQuestionGenerator';
+import { generateAIQuestion } from '../utils/aiQuestionGenerator';
+import type { ConversationContext } from '../utils/aiQuestionGenerator';
 import type { QuestionItem } from '../components/ToggleQuestionnaire';
 
 interface Message {
@@ -117,11 +118,22 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingProbingQuestions, setPendingProbingQuestions] = useState<string[]>([]);
-  const [pendingAIQuestions, setPendingAIQuestions] = useState<string[]>([]);
   const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [topicResponses] = useState<Record<string, string>>({});
   const [currentPhase, setCurrentPhase] = useState<'phase3' | 'phase4'>('phase3');
+
+  // Phase 4 state for topic-by-topic flow
+  const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
+  const [topicConversations, setTopicConversations] = useState<Record<string, {
+    fixedQuestion: string;
+    fixedAnswer?: string;
+    firstAIQuestion?: string;
+    firstAIAnswer?: string;
+    secondAIQuestion?: string;
+    secondAIAnswer?: string;
+  }>>({});
+  const [phase4Complete, setPhase4Complete] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -144,93 +156,207 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Check if there are pending AI-generated questions (Phase 4)
-    if (pendingAIQuestions.length > 0) {
-      // Show the next AI-generated question
-      const nextQuestion = pendingAIQuestions[0];
-      const remainingQuestions = pendingAIQuestions.slice(1);
+    try {
+      // Phase 3: Handle probing questions for each topic
+      if (currentPhase === 'phase3' && pendingProbingQuestions.length > 0) {
+        const nextQuestion = pendingProbingQuestions[0];
+        const remainingQuestions = pendingProbingQuestions.slice(1);
 
-      const aiQuestionMessage: Message = {
-        id: (Date.now() + Math.random()).toString(),
-        text: nextQuestion,
-        isUser: false,
-        timestamp: new Date(),
-        type: 'text'
-      };
+        const probingMessage: Message = {
+          id: (Date.now() + Math.random()).toString(),
+          text: nextQuestion,
+          isUser: false,
+          timestamp: new Date(),
+          type: 'text'
+        };
 
-      setMessages(prev => [...prev, aiQuestionMessage]);
-      setPendingAIQuestions(remainingQuestions);
-      setIsLoading(false);
-      return;
-    }
+        setMessages(prev => [...prev, probingMessage]);
+        setPendingProbingQuestions(remainingQuestions);
 
-    // Check if there are pending probing questions (Phase 3)
-    if (pendingProbingQuestions.length > 0) {
-      // Store the user's response to the probing question
-      // For now we're simplifying - just showing next question
-      // In a full implementation, you'd map this back to the topic
+        // If this was the last probing question, transition to phase 4
+        if (remainingQuestions.length === 0) {
+          setCurrentPhase('phase4');
+          setCurrentTopicIndex(0);
 
-      // Show the next probing question
-      const nextQuestion = pendingProbingQuestions[0];
-      const remainingQuestions = pendingProbingQuestions.slice(1);
+          // Initialize conversation tracking for each topic
+          const initialConversations: Record<string, {
+            fixedQuestion: string;
+            fixedAnswer?: string;
+            firstAIQuestion?: string;
+            firstAIAnswer?: string;
+            secondAIQuestion?: string;
+            secondAIAnswer?: string;
+          }> = {};
+          selectedTopics.forEach(topic => {
+            initialConversations[topic] = {
+              fixedQuestion: generateProbingQuestions([topic])[0].text || ''
+            };
+          });
+          setTopicConversations(initialConversations);
 
-      const probingMessage: Message = {
-        id: (Date.now() + Math.random()).toString(),
-        text: nextQuestion,
-        isUser: false,
-        timestamp: new Date(),
-        type: 'text'
-      };
+          // Start Phase 4: Introduce first topic and ask fixed question
+          if (selectedTopics.length > 0) {
+            const firstTopic = selectedTopics[0];
+            const introMessage: Message = {
+              id: (Date.now() + Math.random()).toString(),
+              text: `Let's talk about ${firstTopic}.`,
+              isUser: false,
+              timestamp: new Date(),
+              type: 'text'
+            };
 
-      setMessages(prev => [...prev, probingMessage]);
-      setPendingProbingQuestions(remainingQuestions);
+            setMessages(prev => [...prev, introMessage]);
+          }
+        }
 
-      // If this was the last probing question, move to phase 4
-      if (remainingQuestions.length === 0) {
-        setCurrentPhase('phase4');
+        setIsLoading(false);
+        return;
       }
 
-      setIsLoading(false);
-      return;
-    }
+      // Phase 4: Handle topic-by-topic conversation
+      if (currentPhase === 'phase4' && !phase4Complete && selectedTopics.length > 0) {
+        const currentTopic = selectedTopics[currentTopicIndex];
+        const conversation = topicConversations[currentTopic];
 
-    // Phase 4: Generate AI follow-up questions after phase 3 is complete
-    if (currentPhase === 'phase4' && selectedTopics.length > 0 && pendingAIQuestions.length === 0) {
-      try {
-        const allAIQuestions = await generateQuestionsForTopics(selectedTopics, topicResponses);
+        // Step 1: User answered the fixed question - show first AI-generated question
+        if (!conversation.fixedAnswer) {
+          setTopicConversations(prev => ({
+            ...prev,
+            [currentTopic]: { ...prev[currentTopic], fixedAnswer: messageText }
+          }));
 
-        if (allAIQuestions.length > 0) {
-          // Add the first question immediately
-          const firstQuestion = allAIQuestions[0];
-          const remainingQuestions = allAIQuestions.slice(1);
+          // Generate first AI question
+          const context: ConversationContext = {
+            initialQuestion: conversation.fixedQuestion,
+            initialAnswer: messageText
+          };
+
+          const firstAIQuestion = await generateAIQuestion(currentTopic, context, false);
 
           const aiQuestionMessage: Message = {
             id: (Date.now() + Math.random()).toString(),
-            text: firstQuestion,
+            text: firstAIQuestion,
             isUser: false,
             timestamp: new Date(),
             type: 'text'
           };
 
           setMessages(prev => [...prev, aiQuestionMessage]);
-          setPendingAIQuestions(remainingQuestions);
-        }
-      } catch (error) {
-        console.error('Error generating AI questions:', error);
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: "Sorry, I'm having trouble generating follow-up questions right now. Please try again.",
-          isUser: false,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
+          setTopicConversations(prev => ({
+            ...prev,
+            [currentTopic]: { ...prev[currentTopic], firstAIQuestion }
+          }));
 
-    setIsLoading(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // Step 2: User answered first AI question - show second AI-generated question
+        if (!conversation.firstAIAnswer) {
+          setTopicConversations(prev => ({
+            ...prev,
+            [currentTopic]: { ...prev[currentTopic], firstAIAnswer: messageText }
+          }));
+
+          // Generate second AI question with full context
+          const context: ConversationContext = {
+            initialQuestion: conversation.fixedQuestion,
+            initialAnswer: conversation.fixedAnswer,
+            firstFollowUpQuestion: conversation.firstAIQuestion,
+            firstFollowUpAnswer: messageText
+          };
+
+          const secondAIQuestion = await generateAIQuestion(currentTopic, context, true);
+
+          const aiQuestionMessage: Message = {
+            id: (Date.now() + Math.random()).toString(),
+            text: secondAIQuestion,
+            isUser: false,
+            timestamp: new Date(),
+            type: 'text'
+          };
+
+          setMessages(prev => [...prev, aiQuestionMessage]);
+          setTopicConversations(prev => ({
+            ...prev,
+            [currentTopic]: { ...prev[currentTopic], secondAIQuestion }
+          }));
+
+          setIsLoading(false);
+          return;
+        }
+
+        // Step 3: User answered second AI question - move to next topic or complete
+        if (!conversation.secondAIAnswer) {
+          setTopicConversations(prev => ({
+            ...prev,
+            [currentTopic]: { ...prev[currentTopic], secondAIAnswer: messageText }
+          }));
+
+          // Check if there are more topics
+          if (currentTopicIndex + 1 < selectedTopics.length) {
+            // Move to next topic
+            const nextTopicIndex = currentTopicIndex + 1;
+            const nextTopic = selectedTopics[nextTopicIndex];
+
+            setCurrentTopicIndex(nextTopicIndex);
+
+            // Initialize conversation for next topic
+            setTopicConversations(prev => ({
+              ...prev,
+              [nextTopic]: {
+                fixedQuestion: generateProbingQuestions([nextTopic])[0].text || ''
+              }
+            }));
+
+            // Introduce next topic
+            const introMessage: Message = {
+              id: (Date.now() + Math.random()).toString(),
+              text: `Let's talk about ${nextTopic}.`,
+              isUser: false,
+              timestamp: new Date(),
+              type: 'text'
+            };
+
+            const nextFixedQuestion: Message = {
+              id: (Date.now() + Math.random() + 1).toString(),
+              text: generateProbingQuestions([nextTopic])[0].text || '',
+              isUser: false,
+              timestamp: new Date(),
+              type: 'text'
+            };
+
+            setMessages(prev => [...prev, introMessage, nextFixedQuestion]);
+          } else {
+            // All topics complete - disable chat
+            setPhase4Complete(true);
+            const completionMessage: Message = {
+              id: (Date.now() + Math.random()).toString(),
+              text: 'Thank you for sharing these wonderful memories! We have all the information we need.',
+              isUser: false,
+              timestamp: new Date(),
+              type: 'text'
+            };
+            setMessages(prev => [...prev, completionMessage]);
+          }
+
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error in message handler:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I encountered an error. Please try again.",
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setIsLoading(false);
+    }
   };
 
   const handleMicClick = () => {
@@ -389,17 +515,17 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       </div>
 
       {/* Input Area */}
-    <div className={`bg-white border-t border-gray-200 p-4 ${hasActiveQuestionnaire ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`bg-white border-t border-gray-200 p-4 ${(hasActiveQuestionnaire || phase4Complete) ? 'opacity-50 pointer-events-none' : ''}`}>
         <div className="flex gap-3 items-center">
             {/* Microphone Button */}
             <button
             onClick={handleMicClick}
-            disabled={hasActiveQuestionnaire || isLoading}
+            disabled={hasActiveQuestionnaire || isLoading || phase4Complete}
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
                 isRecording
                 ? 'bg-red text-white animate-pulse'
                 : 'bg-light-purple text-muted-purple'
-            } ${(hasActiveQuestionnaire || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${(hasActiveQuestionnaire || isLoading || phase4Complete) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
             <svg
                 className="w-5 h-5"
@@ -417,7 +543,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
             {/* Message Input - takes remaining space */}
             <div className="flex-1">
-            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading || hasActiveQuestionnaire} />
+            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading || hasActiveQuestionnaire || phase4Complete} />
             </div>
         </div>
     </div>

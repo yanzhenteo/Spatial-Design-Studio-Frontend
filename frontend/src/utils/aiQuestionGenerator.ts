@@ -1,14 +1,14 @@
 /**
  * Utility function to generate AI follow-up questions using OpenRouter API
- * Generates 2 warm, memory-focused follow-up questions for each topic
+ * Generates contextual follow-up questions based on previous answers
  */
 
 const SYSTEM_PROMPT = `You are helping a caregiver uncover meaningful personal memories from an Alzheimer's patient to support reminiscence therapy and personalized home design.
-The caregiver has already chosen a topic and provided a short response. Your job is to gently ask follow-up questions that help surface positive memories, sensory details, emotional associations, and specific moments that shaped their identity.
+The caregiver has chosen a topic and provided responses to questions. Your job is to gently ask a follow-up question that helps surface positive memories, sensory details, emotional associations, and specific moments that shaped their identity.
 
 Important:
 
-Ask one question at a time.
+Ask ONE question only.
 
 Questions must be simple, warm, and easy to answer.
 
@@ -22,6 +22,8 @@ Avoid leading or correcting the caregiver.
 
 Your goal is not therapy — it is to uncover meaningful details that can be used to inspire home design, comfort, and identity support.
 
+If this is a follow-up to previous answers, build naturally on what they've shared. Help them expand on the memories and details they've already mentioned.
+
 Example approach (not to be shown to user): If they mention "I loved my grandmother's cooking," follow up with questions like:
 
 "What did the kitchen smell like when she cooked?"
@@ -30,26 +32,47 @@ Example approach (not to be shown to user): If they mention "I loved my grandmot
 
 "Do you remember what the plates or table looked like?"`;
 
-interface GeneratedQuestions {
-  topic: string;
-  questions: string[];
+export interface ConversationContext {
+  initialQuestion: string;
+  initialAnswer: string;
+  firstFollowUpQuestion?: string;
+  firstFollowUpAnswer?: string;
 }
 
-export async function generateAIQuestions(
+export async function generateAIQuestion(
   topic: string,
-  userResponse: string
-): Promise<GeneratedQuestions> {
+  context: ConversationContext,
+  isSecondFollowUp: boolean = false
+): Promise<string> {
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
   if (!apiKey) {
     throw new Error('OpenRouter API key not found in environment variables');
   }
 
-  const userMessage = `Topic: ${topic}
-User's response: "${userResponse}"
+  let userMessage = '';
 
-Please generate exactly 2 warm, simple follow-up questions that help uncover meaningful memories related to this response. Format your response as a JSON array with exactly 2 question strings, nothing else. Example format:
-["Question 1?", "Question 2?"]`;
+  if (isSecondFollowUp) {
+    // Second follow-up has more context
+    userMessage = `Topic: ${topic}
+
+Conversation so far:
+Q: "${context.initialQuestion}"
+A: "${context.initialAnswer}"
+
+Q: "${context.firstFollowUpQuestion}"
+A: "${context.firstFollowUpAnswer}"
+
+Please generate one warm, simple follow-up question that naturally builds on both their previous answers and helps uncover more meaningful memories. Return ONLY the question text, nothing else.`;
+  } else {
+    // First follow-up based on initial answer
+    userMessage = `Topic: ${topic}
+
+Q: "${context.initialQuestion}"
+A: "${context.initialAnswer}"
+
+Please generate one warm, simple follow-up question based on their response. Return ONLY the question text, nothing else.`;
+  }
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -73,7 +96,7 @@ Please generate exactly 2 warm, simple follow-up questions that help uncover mea
           }
         ],
         temperature: 0.7,
-        max_tokens: 200
+        max_tokens: 150
       })
     });
 
@@ -82,44 +105,11 @@ Please generate exactly 2 warm, simple follow-up questions that help uncover mea
     }
 
     const data = await response.json();
-    const content = data.choices[0].message.content.trim();
+    const question = data.choices[0].message.content.trim();
 
-    // Parse the JSON array response
-    const questions = JSON.parse(content);
-
-    if (!Array.isArray(questions) || questions.length !== 2) {
-      throw new Error('AI response did not return exactly 2 questions');
-    }
-
-    return {
-      topic,
-      questions
-    };
+    return question;
   } catch (error) {
-    console.error('Error generating AI questions:', error);
-    throw error;
-  }
-}
-
-/**
- * Generate questions for all selected topics
- * Returns an array of questions ready to be displayed sequentially
- */
-export async function generateQuestionsForTopics(
-  topics: string[],
-  userResponses: Record<string, string>
-): Promise<string[]> {
-  const allQuestions: string[] = [];
-
-  try {
-    for (const topic of topics) {
-      const userResponse = userResponses[topic] || '';
-      const result = await generateAIQuestions(topic, userResponse);
-      allQuestions.push(...result.questions);
-    }
-    return allQuestions;
-  } catch (error) {
-    console.error('Error generating questions for topics:', error);
+    console.error('Error generating AI question:', error);
     throw error;
   }
 }
