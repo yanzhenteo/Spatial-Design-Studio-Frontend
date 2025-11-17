@@ -3,12 +3,19 @@ import { motion } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
 import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
+import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
+import type { QuestionItem } from '../components/ToggleQuestionnaire';
 
 interface Message {
   id: string;
-  text: string;
+  text?: string;
   isUser: boolean;
   timestamp: Date;
+  type?: 'text' | 'questionnaire';
+  questionnaire?: {
+    initialMessage: string;
+    questions: QuestionItem[];
+  };
 }
 
 interface ChatPageProps {
@@ -16,13 +23,43 @@ interface ChatPageProps {
   onNext?: () => void;
 }
 
+// Function to convert questions to natural language statements
+function questionToStatement(question: string): string {
+  const conversions: Record<string, string> = {
+    'Do you sometimes enter the wrong room?': 'I sometimes enter the wrong room.',
+    'Do shiny floors or bright lights make it hard to see?': 'Shiny floors and bright lights make it hard for me to see.',
+    'Is it hard to find bathroom at night?': 'It is hard for me to find the bathroom at night.',
+    'Do mirrors/reflections sometimes confuse or startle you?': 'Mirrors and reflections sometimes confuse or startle me.',
+    'Clear signs or colored doors would help?': 'Clear signs or colored doors would help me.',
+    'Slipped or nearly slipped in the bathroom?': 'I have slipped or nearly slipped in the bathroom.',
+    'Cluttered counters tops make finding things hard?': 'Cluttered counter tops make it hard for me to find things.',
+    'Are stairs/step edges are hard to judge?': 'Stairs and step edges are hard for me to judge.',
+  };
+
+  return conversions[question] || question;
+}
+
 function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hello! I'm here to help you create wonderful memories. What would you like to talk about today?",
+      text: "Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:",
       isUser: false,
-      timestamp: new Date()
+      timestamp: new Date(),
+      type: 'questionnaire',
+      questionnaire: {
+        initialMessage: "Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:",
+        questions: [
+          { id: 'q1', question: 'Do you sometimes enter the wrong room?', selected: false },
+          { id: 'q2', question: 'Do shiny floors or bright lights make it hard to see?', selected: false },
+          { id: 'q3', question: 'Is it hard to find bathroom at night?', selected: false },
+          { id: 'q4', question: 'Do mirrors/reflections sometimes confuse or startle you?', selected: false },
+          { id: 'q5', question: 'Clear signs or colored doors would help?', selected: false },
+          { id: 'q6', question: 'Slipped or nearly slipped in the bathroom?', selected: false },
+          { id: 'q7', question: 'Cluttered counters tops make finding things hard?', selected: false },
+          { id: 'q8', question: 'Are stairs/step edges are hard to judge?', selected: false },
+        ]
+      }
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -123,14 +160,40 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4">
-        {messages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message.text}
-            isUser={message.isUser}
-            timestamp={message.timestamp}
-          />
-        ))}
+        {messages.map((message) => {
+          if (message.type === 'questionnaire' && message.questionnaire) {
+            return (
+              <ToggleQuestionnaire
+                key={message.id}
+                initialMessage={message.questionnaire.initialMessage}
+                questions={message.questionnaire.questions}
+                onComplete={(selectedQuestions) => {
+                  // Convert questions to natural language statements
+                  const naturalLanguageResponses = selectedQuestions
+                    .map(q => questionToStatement(q.question))
+                    .join(' ');
+
+                  const userResponse: Message = {
+                    id: (Date.now() + Math.random()).toString(),
+                    text: naturalLanguageResponses,
+                    isUser: true,
+                    timestamp: new Date()
+                  };
+                  setMessages(prev => [...prev, userResponse]);
+                  // TODO: Send to backend here
+                }}
+              />
+            );
+          }
+          return (
+            <ChatBubble
+              key={message.id}
+              message={message.text || ''}
+              isUser={message.isUser}
+              timestamp={message.timestamp}
+            />
+          );
+        })}
         
         {isLoading && (
           <div className="flex justify-start mb-4">
