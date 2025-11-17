@@ -174,15 +174,49 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       // Navigate to PostMemoryBot after successful save
       onNext?.();
     } catch (error) {
-      console.error('Error saving conversation:', error);
-      // Show error message but still allow navigation
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Note: Could not save to backend, but you can continue.",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      console.error('Error saving conversation to backend:', error);
+
+      try {
+        // Fallback: Save JSON locally to the root of the project
+        const conversationData = {
+          selectedTopics,
+          topicConversations,
+          allMessages: messages,
+          timestamp: new Date().toISOString()
+        };
+
+        const filename = `conversation_${Date.now()}.json`;
+        const dataStr = JSON.stringify(conversationData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        console.log(`Conversation saved locally as ${filename}`);
+
+        // Show success message for local save
+        const successMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `Note: Backend unavailable. Conversation saved locally as ${filename}. You can continue.`,
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, successMessage]);
+      } catch (localSaveError) {
+        console.error('Error saving conversation locally:', localSaveError);
+        // Show error message but still allow navigation
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: "Note: Could not save conversation, but you can continue.",
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+
       // Still navigate after a delay
       setTimeout(() => onNext?.(), 2000);
     } finally {
