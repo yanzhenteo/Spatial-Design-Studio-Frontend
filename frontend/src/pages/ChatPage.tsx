@@ -27,14 +27,16 @@ interface ChatPageProps {
 // Function to convert questions to natural language statements
 function questionToStatement(question: string): string {
   const conversions: Record<string, string> = {
-    'Do you sometimes enter the wrong room?': 'I sometimes enter the wrong room.',
-    'Do shiny floors or bright lights make it hard to see?': 'Shiny floors and bright lights make it hard for me to see.',
-    'Is it hard to find bathroom at night?': 'It is hard for me to find the bathroom at night.',
-    'Do mirrors/reflections sometimes confuse or startle you?': 'Mirrors and reflections sometimes confuse or startle me.',
-    'Clear signs or colored doors would help?': 'Clear signs or colored doors would help me.',
-    'Slipped or nearly slipped in the bathroom?': 'I have slipped or nearly slipped in the bathroom.',
-    'Cluttered counters tops make finding things hard?': 'Cluttered counter tops make it hard for me to find things.',
-    'Are stairs/step edges are hard to judge?': 'Stairs and step edges are hard for me to judge.',
+    'Does the patient misjudge steps, edges, or depth?': 'I misjudge steps, edges, or depth.',
+    'Do patterned floors or shiny surfaces cause confusion?': 'Patterned floors or shiny surfaces cause me confusion.',
+    'Do they struggle with glare or bright light?': 'I struggle with glare or bright light.',
+    'Do mirrors ever cause confusion or distress?': 'Mirrors sometimes cause me confusion or distress.',
+    'Do they go to the wrong door when trying to leave a room?': 'I sometimes go to the wrong door when trying to leave a room.',
+    'Do they go toward an exit instead of the bathroom when waking up at night?': 'I sometimes go toward an exit instead of the bathroom when waking up at night.',
+    'Have they slipped or nearly fallen in the bathroom recently?': 'I have slipped or nearly fallen in the bathroom recently.',
+    'Do they have difficulty using stairs safely?': 'I have difficulty using stairs safely.',
+    'Do they lose track of where items are stored unless they\'re visible?': 'I lose track of where items are stored unless they\'re visible.',
+    'Do they struggle with clutter or too many objects on a surface?': 'I struggle with clutter or too many objects on a surface.',
   };
 
   return conversions[question] || question;
@@ -43,11 +45,18 @@ function questionToStatement(question: string): string {
 // Function to convert activities to natural language statements
 function activityToStatement(activity: string): string {
   const conversions: Record<string, string> = {
-    'Travel': 'Travel',
-    'Nature': 'Nature',
-    'Social Interaction': 'Social Interaction',
-    'Food': 'Food',
-    'Music': 'Music',
+    'Food & cooking': 'Food & cooking',
+    'Music & songs': 'Music & songs',
+    'Nature & outdoors': 'Nature & outdoors',
+    'Travel & places': 'Travel & places',
+    'Sports & movement': 'Sports & movement',
+    'Work & skills': 'Work & skills',
+    'Family & relationships': 'Family & relationships',
+    'Celebrations & traditions': 'Celebrations & traditions',
+    'Spirituality / faith': 'Spirituality / faith',
+    'Movies / TV / stories': 'Movies / TV / stories',
+    'Art / crafts / making things': 'Art / crafts / making things',
+    'Pets & animals': 'Pets & animals',
   };
 
   return conversions[activity] || activity;
@@ -56,11 +65,18 @@ function activityToStatement(activity: string): string {
 // Function to generate probing questions based on selected activities
 function generateProbingQuestions(activities: string[]): Message[] {
   const questionMap: Record<string, string> = {
-    'Travel': 'What is your favorite destination you have visited?',
-    'Nature': 'What is your favorite outdoor activity?',
-    'Social Interaction': 'What is your favorite social activity?',
-    'Food': 'What is your favorite food?',
-    'Music': 'What is a song that will make you happy?',
+    'Food & cooking': 'What food or meal always makes them happy?',
+    'Music & songs': 'What music, song, or sound brings them joy or calm?',
+    'Nature & outdoors': 'Is there a place in nature they love or talk about often?',
+    'Travel & places': 'What city, country, or place holds special memories for them?',
+    'Sports & movement': 'Is there a sport or team they love, watch, or used to play?',
+    'Work & skills': 'What kind of work or skill made them feel proud or confident?',
+    'Family & relationships': 'Which people from their life do they talk about the most?',
+    'Celebrations & traditions': 'Is there a holiday or tradition they especially look forward to?',
+    'Spirituality / faith': 'Do they have a meaningful spiritual practice or place of worship?',
+    'Movies / TV / stories': 'What movie, show, or story do they enjoy or rewatch?',
+    'Art / crafts / making things': 'Do they enjoy making, drawing, or crafting anything in particular?',
+    'Pets & animals': 'Have they ever had a favorite pet or animal they loved?',
   };
 
   return activities.map((activity, index) => ({
@@ -83,14 +99,16 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       questionnaire: {
         initialMessage: "Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:",
         questions: [
-          { id: 'q1', question: 'Do you sometimes enter the wrong room?', selected: false },
-          { id: 'q2', question: 'Do shiny floors or bright lights make it hard to see?', selected: false },
-          { id: 'q3', question: 'Is it hard to find bathroom at night?', selected: false },
-          { id: 'q4', question: 'Do mirrors/reflections sometimes confuse or startle you?', selected: false },
-          { id: 'q5', question: 'Clear signs or colored doors would help?', selected: false },
-          { id: 'q6', question: 'Slipped or nearly slipped in the bathroom?', selected: false },
-          { id: 'q7', question: 'Cluttered counters tops make finding things hard?', selected: false },
-          { id: 'q8', question: 'Are stairs/step edges are hard to judge?', selected: false },
+          { id: 'q1', question: 'Does the patient misjudge steps, edges, or depth?', selected: false },
+          { id: 'q2', question: 'Do patterned floors or shiny surfaces cause confusion?', selected: false },
+          { id: 'q3', question: 'Do they struggle with glare or bright light?', selected: false },
+          { id: 'q4', question: 'Do mirrors ever cause confusion or distress?', selected: false },
+          { id: 'q5', question: 'Do they go to the wrong door when trying to leave a room?', selected: false },
+          { id: 'q6', question: 'Do they go toward an exit instead of the bathroom when waking up at night?', selected: false },
+          { id: 'q7', question: 'Have they slipped or nearly fallen in the bathroom recently?', selected: false },
+          { id: 'q8', question: 'Do they have difficulty using stairs safely?', selected: false },
+          { id: 'q9', question: 'Do they lose track of where items are stored unless they\'re visible?', selected: false },
+          { id: 'q10', question: 'Do they struggle with clutter or too many objects on a surface?', selected: false },
         ]
       }
     }
@@ -98,6 +116,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingProbingQuestions, setPendingProbingQuestions] = useState<string[]>([]);
+  const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -250,19 +269,26 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                   if (isFirstQuestionnaire) {
                     const secondQuestionnaire: Message = {
                       id: (Date.now() + Math.random() + 1).toString(),
-                      text: 'Now, pick two activities you enjoy the most:',
+                      text: 'Now, pick two topics that are most meaningful to them:',
                       isUser: false,
                       timestamp: new Date(),
                       type: 'questionnaire',
                       questionnaire: {
-                        initialMessage: 'Now, pick two activities you enjoy the most:',
+                        initialMessage: 'Now, pick two topics that are most meaningful to them:',
                         maxSelections: 2,
                         questions: [
-                          { id: 'activity1', question: 'Travel', selected: false },
-                          { id: 'activity2', question: 'Nature', selected: false },
-                          { id: 'activity3', question: 'Social Interaction', selected: false },
-                          { id: 'activity4', question: 'Food', selected: false },
-                          { id: 'activity5', question: 'Music', selected: false },
+                          { id: 'topic1', question: 'Food & cooking', selected: false },
+                          { id: 'topic2', question: 'Music & songs', selected: false },
+                          { id: 'topic3', question: 'Nature & outdoors', selected: false },
+                          { id: 'topic4', question: 'Travel & places', selected: false },
+                          { id: 'topic5', question: 'Sports & movement', selected: false },
+                          { id: 'topic6', question: 'Work & skills', selected: false },
+                          { id: 'topic7', question: 'Family & relationships', selected: false },
+                          { id: 'topic8', question: 'Celebrations & traditions', selected: false },
+                          { id: 'topic9', question: 'Spirituality / faith', selected: false },
+                          { id: 'topic10', question: 'Movies / TV / stories', selected: false },
+                          { id: 'topic11', question: 'Art / crafts / making things', selected: false },
+                          { id: 'topic12', question: 'Pets & animals', selected: false },
                         ]
                       }
                     };
@@ -279,6 +305,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
                       // Store remaining questions to show after user responds
                       setPendingProbingQuestions(questionTexts.slice(1));
+
+                      // No more questionnaires - enable text input
+                      setHasActiveQuestionnaire(false);
                     }
                   }
 
@@ -313,21 +342,22 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       </div>
 
       {/* Input Area */}
-    <div className="bg-white border-t border-gray-200 p-4">
+    <div className={`bg-white border-t border-gray-200 p-4 ${hasActiveQuestionnaire ? 'opacity-50 pointer-events-none' : ''}`}>
         <div className="flex gap-3 items-center">
             {/* Microphone Button */}
             <button
             onClick={handleMicClick}
+            disabled={hasActiveQuestionnaire || isLoading}
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
-                isRecording 
-                ? 'bg-red text-white animate-pulse' 
+                isRecording
+                ? 'bg-red text-white animate-pulse'
                 : 'bg-light-purple text-muted-purple'
-            }`}
+            } ${(hasActiveQuestionnaire || isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-            <svg 
-                className="w-5 h-5" 
-                fill={isRecording ? "currentColor" : "none"} 
-                stroke="currentColor" 
+            <svg
+                className="w-5 h-5"
+                fill={isRecording ? "currentColor" : "none"}
+                stroke="currentColor"
                 viewBox="0 0 24 24"
             >
                 {isRecording ? (
@@ -340,7 +370,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
             {/* Message Input - takes remaining space */}
             <div className="flex-1">
-            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading} />
+            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading || hasActiveQuestionnaire} />
             </div>
         </div>
     </div>
