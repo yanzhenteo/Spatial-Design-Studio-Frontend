@@ -44,9 +44,6 @@ function ToggleQuestionnaire({
     onComplete(selectedQuestions);
   };
 
-  const selectedCount = questions.filter(q => q.selected).length;
-  const selectedQuestions = questions.filter(q => q.selected);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}

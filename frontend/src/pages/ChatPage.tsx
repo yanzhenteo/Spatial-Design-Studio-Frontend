@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
 import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
+import { generateQuestionsForTopics } from '../utils/aiQuestionGenerator';
 import type { QuestionItem } from '../components/ToggleQuestionnaire';
 
 interface Message {
@@ -116,7 +117,11 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [pendingProbingQuestions, setPendingProbingQuestions] = useState<string[]>([]);
+  const [pendingAIQuestions, setPendingAIQuestions] = useState<string[]>([]);
   const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [topicResponses] = useState<Record<string, string>>({});
+  const [currentPhase, setCurrentPhase] = useState<'phase3' | 'phase4'>('phase3');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -139,8 +144,32 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Check if there are pending probing questions
+    // Check if there are pending AI-generated questions (Phase 4)
+    if (pendingAIQuestions.length > 0) {
+      // Show the next AI-generated question
+      const nextQuestion = pendingAIQuestions[0];
+      const remainingQuestions = pendingAIQuestions.slice(1);
+
+      const aiQuestionMessage: Message = {
+        id: (Date.now() + Math.random()).toString(),
+        text: nextQuestion,
+        isUser: false,
+        timestamp: new Date(),
+        type: 'text'
+      };
+
+      setMessages(prev => [...prev, aiQuestionMessage]);
+      setPendingAIQuestions(remainingQuestions);
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if there are pending probing questions (Phase 3)
     if (pendingProbingQuestions.length > 0) {
+      // Store the user's response to the probing question
+      // For now we're simplifying - just showing next question
+      // In a full implementation, you'd map this back to the topic
+
       // Show the next probing question
       const nextQuestion = pendingProbingQuestions[0];
       const remainingQuestions = pendingProbingQuestions.slice(1);
@@ -155,37 +184,53 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
       setMessages(prev => [...prev, probingMessage]);
       setPendingProbingQuestions(remainingQuestions);
+
+      // If this was the last probing question, move to phase 4
+      if (remainingQuestions.length === 0) {
+        setCurrentPhase('phase4');
+      }
+
       setIsLoading(false);
       return;
     }
 
-    // TODO: Connect to backend here
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    // Phase 4: Generate AI follow-up questions after phase 3 is complete
+    if (currentPhase === 'phase4' && selectedTopics.length > 0 && pendingAIQuestions.length === 0) {
+      try {
+        const allAIQuestions = await generateQuestionsForTopics(selectedTopics, topicResponses);
 
-      // Add bot response (mock for now)
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: `I received your message: "${messageText}". This is where the AI response will go.`,
-        isUser: false,
-        timestamp: new Date()
-      };
+        if (allAIQuestions.length > 0) {
+          // Add the first question immediately
+          const firstQuestion = allAIQuestions[0];
+          const remainingQuestions = allAIQuestions.slice(1);
 
-      setMessages(prev => [...prev, botMessage]);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Add error message
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Sorry, I'm having trouble connecting right now. Please try again.",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+          const aiQuestionMessage: Message = {
+            id: (Date.now() + Math.random()).toString(),
+            text: firstQuestion,
+            isUser: false,
+            timestamp: new Date(),
+            type: 'text'
+          };
+
+          setMessages(prev => [...prev, aiQuestionMessage]);
+          setPendingAIQuestions(remainingQuestions);
+        }
+      } catch (error) {
+        console.error('Error generating AI questions:', error);
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: "Sorry, I'm having trouble generating follow-up questions right now. Please try again.",
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
     }
+
+    setIsLoading(false);
   };
 
   const handleMicClick = () => {
@@ -296,6 +341,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                   } else {
                     // This is the second questionnaire - store all probing questions for sequential display
                     const selectedActivities = selectedQuestions.map(q => q.question);
+                    setSelectedTopics(selectedActivities);
+
                     if (selectedActivities.length > 0) {
                       const allProbingQuestions = generateProbingQuestions(selectedActivities);
                       const questionTexts = allProbingQuestions.map(q => q.text).filter((text): text is string => text !== undefined);
