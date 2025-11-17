@@ -39,6 +39,19 @@ function questionToStatement(question: string): string {
   return conversions[question] || question;
 }
 
+// Function to convert activities to natural language statements
+function activityToStatement(activity: string): string {
+  const conversions: Record<string, string> = {
+    'Travel': 'Travel',
+    'Nature': 'Nature',
+    'Social Interaction': 'Social Interaction',
+    'Food': 'Food',
+    'Music': 'Music',
+  };
+
+  return conversions[activity] || activity;
+}
+
 function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -160,7 +173,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4">
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           if (message.type === 'questionnaire' && message.questionnaire) {
             return (
               <ToggleQuestionnaire
@@ -168,18 +181,52 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                 initialMessage={message.questionnaire.initialMessage}
                 questions={message.questionnaire.questions}
                 onComplete={(selectedQuestions) => {
+                  // Determine which questionnaire this is based on content
+                  const isFirstQuestionnaire = message.questionnaire?.initialMessage.includes('symptoms') || false;
+
                   // Convert questions to natural language statements
                   const naturalLanguageResponses = selectedQuestions
-                    .map(q => questionToStatement(q.question))
-                    .join(' ');
+                    .map(q => {
+                      if (isFirstQuestionnaire) {
+                        return questionToStatement(q.question);
+                      } else {
+                        return activityToStatement(q.question);
+                      }
+                    })
+                    .join(' and ');
 
                   const userResponse: Message = {
                     id: (Date.now() + Math.random()).toString(),
-                    text: naturalLanguageResponses,
+                    text: naturalLanguageResponses + '.',
                     isUser: true,
                     timestamp: new Date()
                   };
-                  setMessages(prev => [...prev, userResponse]);
+
+                  const updatedMessages = [...messages.slice(0, index + 1), userResponse];
+
+                  // Only add the next questionnaire if this is the first one
+                  if (isFirstQuestionnaire) {
+                    const secondQuestionnaire: Message = {
+                      id: (Date.now() + Math.random() + 1).toString(),
+                      text: 'Now, pick two activities you enjoy the most:',
+                      isUser: false,
+                      timestamp: new Date(),
+                      type: 'questionnaire',
+                      questionnaire: {
+                        initialMessage: 'Now, pick two activities you enjoy the most:',
+                        questions: [
+                          { id: 'activity1', question: 'Travel', selected: false },
+                          { id: 'activity2', question: 'Nature', selected: false },
+                          { id: 'activity3', question: 'Social Interaction', selected: false },
+                          { id: 'activity4', question: 'Food', selected: false },
+                          { id: 'activity5', question: 'Music', selected: false },
+                        ]
+                      }
+                    };
+                    updatedMessages.push(secondQuestionnaire);
+                  }
+
+                  setMessages(updatedMessages);
                   // TODO: Send to backend here
                 }}
               />
