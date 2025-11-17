@@ -15,6 +15,7 @@ interface Message {
   questionnaire?: {
     initialMessage: string;
     questions: QuestionItem[];
+    maxSelections?: number;
   };
 }
 
@@ -52,6 +53,25 @@ function activityToStatement(activity: string): string {
   return conversions[activity] || activity;
 }
 
+// Function to generate probing questions based on selected activities
+function generateProbingQuestions(activities: string[]): Message[] {
+  const questionMap: Record<string, string> = {
+    'Travel': 'What is your favorite destination you have visited?',
+    'Nature': 'What is your favorite outdoor activity?',
+    'Social Interaction': 'What is your favorite social activity?',
+    'Food': 'What is your favorite food?',
+    'Music': 'What is a song that will make you happy?',
+  };
+
+  return activities.map((activity, index) => ({
+    id: (Date.now() + Math.random() + index).toString(),
+    text: questionMap[activity] || `Tell me more about ${activity}`,
+    isUser: false,
+    timestamp: new Date(),
+    type: 'text'
+  }));
+}
+
 function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -77,6 +97,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [pendingProbingQuestions, setPendingProbingQuestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -99,11 +120,31 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
+    // Check if there are pending probing questions
+    if (pendingProbingQuestions.length > 0) {
+      // Show the next probing question
+      const nextQuestion = pendingProbingQuestions[0];
+      const remainingQuestions = pendingProbingQuestions.slice(1);
+
+      const probingMessage: Message = {
+        id: (Date.now() + Math.random()).toString(),
+        text: nextQuestion,
+        isUser: false,
+        timestamp: new Date(),
+        type: 'text'
+      };
+
+      setMessages(prev => [...prev, probingMessage]);
+      setPendingProbingQuestions(remainingQuestions);
+      setIsLoading(false);
+      return;
+    }
+
     // TODO: Connect to backend here
     try {
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Add bot response (mock for now)
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -180,6 +221,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                 key={message.id}
                 initialMessage={message.questionnaire.initialMessage}
                 questions={message.questionnaire.questions}
+                maxSelections={message.questionnaire.maxSelections}
                 onComplete={(selectedQuestions) => {
                   // Determine which questionnaire this is based on content
                   const isFirstQuestionnaire = message.questionnaire?.initialMessage.includes('symptoms') || false;
@@ -214,6 +256,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                       type: 'questionnaire',
                       questionnaire: {
                         initialMessage: 'Now, pick two activities you enjoy the most:',
+                        maxSelections: 2,
                         questions: [
                           { id: 'activity1', question: 'Travel', selected: false },
                           { id: 'activity2', question: 'Nature', selected: false },
@@ -224,6 +267,19 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                       }
                     };
                     updatedMessages.push(secondQuestionnaire);
+                  } else {
+                    // This is the second questionnaire - store all probing questions for sequential display
+                    const selectedActivities = selectedQuestions.map(q => q.question);
+                    if (selectedActivities.length > 0) {
+                      const allProbingQuestions = generateProbingQuestions(selectedActivities);
+                      const questionTexts = allProbingQuestions.map(q => q.text).filter((text): text is string => text !== undefined);
+
+                      // Add the first question immediately
+                      updatedMessages.push(allProbingQuestions[0]);
+
+                      // Store remaining questions to show after user responds
+                      setPendingProbingQuestions(questionTexts.slice(1));
+                    }
                   }
 
                   setMessages(updatedMessages);

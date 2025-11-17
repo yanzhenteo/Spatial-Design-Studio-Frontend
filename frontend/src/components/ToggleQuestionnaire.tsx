@@ -12,21 +12,31 @@ interface ToggleQuestionnaireProps {
   initialMessage: string;
   questions: QuestionItem[];
   onComplete: (selectedQuestions: QuestionItem[]) => void;
+  maxSelections?: number;
 }
 
 function ToggleQuestionnaire({
   initialMessage,
   questions: initialQuestions,
-  onComplete
+  onComplete,
+  maxSelections
 }: ToggleQuestionnaireProps) {
   const [questions, setQuestions] = useState<QuestionItem[]>(initialQuestions);
 
   const handleToggle = (id: string) => {
-    setQuestions(prev =>
-      prev.map(q =>
+    setQuestions(prev => {
+      const currentQuestion = prev.find(q => q.id === id);
+      const selectedCount = prev.filter(q => q.selected).length;
+
+      // If max selections is set and user tries to select more than allowed (and it's currently not selected)
+      if (maxSelections && !currentQuestion?.selected && selectedCount >= maxSelections) {
+        return prev; // Don't allow more selections
+      }
+
+      return prev.map(q =>
         q.id === id ? { ...q, selected: !q.selected } : q
-      )
-    );
+      );
+    });
   };
 
   const handleDone = () => {
