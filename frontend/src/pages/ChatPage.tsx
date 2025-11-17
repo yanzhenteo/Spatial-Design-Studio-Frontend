@@ -117,10 +117,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [pendingProbingQuestions, setPendingProbingQuestions] = useState<string[]>([]);
   const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [currentPhase, setCurrentPhase] = useState<'phase3' | 'phase4'>('phase3');
+  const [currentPhase, setCurrentPhase] = useState<'phase4'>('phase4');
 
   // Phase 4 state for topic-by-topic flow
   const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
@@ -133,6 +132,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     secondAIAnswer?: string;
   }>>({});
   const [phase4Complete, setPhase4Complete] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -143,6 +143,52 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const saveConversation = async () => {
+    try {
+      setIsSubmitting(true);
+
+      // Prepare conversation data
+      const conversationData = {
+        selectedTopics,
+        topicConversations,
+        allMessages: messages,
+        timestamp: new Date().toISOString()
+      };
+
+      // Call backend endpoint to save conversation
+      const response = await fetch('/api/conversations/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(conversationData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save conversation: ${response.status}`);
+      }
+
+      console.log('Conversation saved successfully');
+
+      // Navigate to PostMemoryBot after successful save
+      onNext?.();
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+      // Show error message but still allow navigation
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Note: Could not save to backend, but you can continue.",
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      // Still navigate after a delay
+      setTimeout(() => onNext?.(), 2000);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleSendMessage = async (messageText: string) => {
     // Add user message
@@ -157,62 +203,6 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     setIsLoading(true);
 
     try {
-      // Phase 3: Handle probing questions for each topic
-      if (currentPhase === 'phase3' && pendingProbingQuestions.length > 0) {
-        const nextQuestion = pendingProbingQuestions[0];
-        const remainingQuestions = pendingProbingQuestions.slice(1);
-
-        const probingMessage: Message = {
-          id: (Date.now() + Math.random()).toString(),
-          text: nextQuestion,
-          isUser: false,
-          timestamp: new Date(),
-          type: 'text'
-        };
-
-        setMessages(prev => [...prev, probingMessage]);
-        setPendingProbingQuestions(remainingQuestions);
-
-        // If this was the last probing question, transition to phase 4
-        if (remainingQuestions.length === 0) {
-          setCurrentPhase('phase4');
-          setCurrentTopicIndex(0);
-
-          // Initialize conversation tracking for each topic
-          const initialConversations: Record<string, {
-            fixedQuestion: string;
-            fixedAnswer?: string;
-            firstAIQuestion?: string;
-            firstAIAnswer?: string;
-            secondAIQuestion?: string;
-            secondAIAnswer?: string;
-          }> = {};
-          selectedTopics.forEach(topic => {
-            initialConversations[topic] = {
-              fixedQuestion: generateProbingQuestions([topic])[0].text || ''
-            };
-          });
-          setTopicConversations(initialConversations);
-
-          // Start Phase 4: Introduce first topic and ask fixed question
-          if (selectedTopics.length > 0) {
-            const firstTopic = selectedTopics[0];
-            const introMessage: Message = {
-              id: (Date.now() + Math.random()).toString(),
-              text: `Let's talk about ${firstTopic}.`,
-              isUser: false,
-              timestamp: new Date(),
-              type: 'text'
-            };
-
-            setMessages(prev => [...prev, introMessage]);
-          }
-        }
-
-        setIsLoading(false);
-        return;
-      }
-
       // Phase 4: Handle topic-by-topic conversation
       if (currentPhase === 'phase4' && !phase4Complete && selectedTopics.length > 0) {
         const currentTopic = selectedTopics[currentTopicIndex];
@@ -392,10 +382,15 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
         {/* Next Button */}
         <button
-          onClick={onNext}
-          className="text-muted-purple text-button-text flex items-center gap-2"
+          onClick={phase4Complete ? saveConversation : onNext}
+          disabled={isSubmitting}
+          className={`text-button-text flex items-center gap-2 transition-opacity ${
+            phase4Complete
+              ? 'bg-orange text-white px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50'
+              : 'text-muted-purple disabled:opacity-50'
+          }`}
         >
-          Next
+          {isSubmitting ? 'Saving...' : 'Next'}
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
@@ -465,21 +460,52 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                     };
                     updatedMessages.push(secondQuestionnaire);
                   } else {
-                    // This is the second questionnaire - store all probing questions for sequential display
+                    // This is the second questionnaire - transition directly to Phase 4
                     const selectedActivities = selectedQuestions.map(q => q.question);
                     setSelectedTopics(selectedActivities);
 
+                    // Set phase to 4 immediately after topic selection
+                    setCurrentPhase('phase4');
+                    setCurrentTopicIndex(0);
+
+                    // Initialize conversation tracking for each topic
+                    const initialConversations: Record<string, {
+                      fixedQuestion: string;
+                      fixedAnswer?: string;
+                      firstAIQuestion?: string;
+                      firstAIAnswer?: string;
+                      secondAIQuestion?: string;
+                      secondAIAnswer?: string;
+                    }> = {};
+                    selectedActivities.forEach(topic => {
+                      initialConversations[topic] = {
+                        fixedQuestion: generateProbingQuestions([topic])[0].text || ''
+                      };
+                    });
+                    setTopicConversations(initialConversations);
+
                     if (selectedActivities.length > 0) {
-                      const allProbingQuestions = generateProbingQuestions(selectedActivities);
-                      const questionTexts = allProbingQuestions.map(q => q.text).filter((text): text is string => text !== undefined);
+                      // Start Phase 4: Introduce first topic and ask fixed question
+                      const firstTopic = selectedActivities[0];
+                      const introMessage: Message = {
+                        id: (Date.now() + Math.random()).toString(),
+                        text: `Let's talk about ${firstTopic}.`,
+                        isUser: false,
+                        timestamp: new Date(),
+                        type: 'text'
+                      };
 
-                      // Add the first question immediately
-                      updatedMessages.push(allProbingQuestions[0]);
+                      const fixedQuestionMessage: Message = {
+                        id: (Date.now() + Math.random() + 1).toString(),
+                        text: generateProbingQuestions([firstTopic])[0].text || '',
+                        isUser: false,
+                        timestamp: new Date(),
+                        type: 'text'
+                      };
 
-                      // Store remaining questions to show after user responds
-                      setPendingProbingQuestions(questionTexts.slice(1));
+                      updatedMessages.push(introMessage, fixedQuestionMessage);
 
-                      // No more questionnaires - enable text input
+                      // Enable text input for Phase 4
                       setHasActiveQuestionnaire(false);
                     }
                   }
@@ -490,6 +516,28 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
               />
             );
           }
+
+          // Check if this is the completion message and render with a button
+          if (phase4Complete && message.text?.includes('Thank you for sharing')) {
+            return (
+              <div key={message.id} className="flex justify-start mb-4">
+                <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-6 max-w-[70%] space-y-4">
+                  <p className="text-big-text">{message.text}</p>
+                  <p className="text-fill-text text-dark-grey opacity-70 mt-1">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <button
+                    onClick={saveConversation}
+                    disabled={isSubmitting}
+                    className="w-full bg-orange text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    {isSubmitting ? 'Saving...' : 'Next'}
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
           return (
             <ChatBubble
               key={message.id}
