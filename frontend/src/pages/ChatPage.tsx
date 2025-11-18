@@ -364,8 +364,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       transition={{ duration: 0.6, ease: "easeInOut" }}
       className="min-h-screen bg-gradient-lightpurple-to-lightblue flex flex-col"
     >
-      {/* Header */}
-      <div className="bg-white shadow-sm p-4 flex items-center justify-between">
+      {/* Fixed Header */}
+      <div className="bg-white shadow-sm p-4 flex items-center justify-between fixed top-0 left-0 right-0 z-10">
         {/* Back Button */}
         <button
           onClick={onBack}
@@ -397,8 +397,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         </button>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4">
+      {/* Scrollable Messages Area */}
+      <div className="flex-1 overflow-y-auto pt-16 pb-24 px-4">
         {messages.map((message, index) => {
           if (message.type === 'questionnaire' && message.questionnaire) {
             return (
@@ -562,8 +562,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-    <div className={`bg-white border-t border-gray-200 p-4 ${(hasActiveQuestionnaire || phase4Complete) ? 'opacity-50 pointer-events-none' : ''}`}>
+      {/* Fixed Input Area */}
+      <div className={`bg-white border-t border-gray-200 p-4 fixed bottom-0 left-0 right-0 z-10 ${(hasActiveQuestionnaire || phase4Complete) ? 'opacity-50 pointer-events-none' : ''}`}>
         <div className="flex gap-3 items-center">
             {/* Microphone Button */}
             <button
@@ -594,7 +594,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
             <MessageInput onSendMessage={handleSendMessage} disabled={isLoading || hasActiveQuestionnaire || phase4Complete} />
             </div>
         </div>
-    </div>
+      </div>
     </motion.div>
   );
 }
