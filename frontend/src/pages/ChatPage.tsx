@@ -156,11 +156,20 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         timestamp: new Date().toISOString()
       };
 
+      // Get the auth token from localStorage
+      const userAuth = localStorage.getItem('userAuth');
+      if (!userAuth) {
+        throw new Error('User not authenticated. Cannot save conversation.');
+      }
+      const { token } = JSON.parse(userAuth);
+
       // Call backend endpoint to save conversation
       const response = await fetch('/api/conversations/save', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Add the Authorization header with the user's token
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(conversationData)
       });
