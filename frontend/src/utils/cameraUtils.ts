@@ -1,5 +1,12 @@
 // src/utils/cameraUtils.ts
 import { useState, useRef, useEffect, type RefObject } from 'react';
+import { analyzeAndTransformImage, type Issue } from '../services/imageAnalysisService';
+
+export interface AnalysisResults {
+  analysisText: string;
+  issues: Issue[];
+  transformedImageUrl: string | null;
+}
 
 export interface CameraHookReturn {
   isCameraActive: boolean;
@@ -11,10 +18,10 @@ export interface CameraHookReturn {
   stopCamera: () => void;
   captureImage: () => void;
   retakePhoto: () => void;
-  uploadImage: (selectedIssues: string[], comments: string) => Promise<void>;
+  uploadImage: (selectedIssues: string[], comments: string) => Promise<AnalysisResults>;
 }
 
-export const useCamera = (onUploadComplete?: () => void): CameraHookReturn => {
+export const useCamera = (onUploadComplete?: (results: AnalysisResults) => void): CameraHookReturn => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -174,40 +181,54 @@ export const useCamera = (onUploadComplete?: () => void): CameraHookReturn => {
   };
 
   /**
-   * Upload image to backend
+   * Upload image to backend and process through analysis + transformation pipeline
    */
   const uploadImage = async (
     selectedIssues: string[],
     comments: string
-  ): Promise<void> => {
+  ): Promise<AnalysisResults> => {
     if (!capturedImage) throw new Error("No image to upload.");
 
     setIsUploading(true);
 
     try {
+      // Convert data URL to blob
       const response = await fetch(capturedImage);
       const blob = await response.blob();
 
-      const formData = new FormData();
-      formData.append("image", blob, "captured-image.jpg");
-      formData.append("selectedIssues", JSON.stringify(selectedIssues));
-      formData.append("comments", comments);
+      console.log("Starting image analysis and transformation pipeline...");
+      console.log("Selected issues:", selectedIssues);
+      console.log("Comments:", comments);
 
-      const uploadResponse = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData
-      });
+      // Call the analysis and transformation service
+      const result = await analyzeAndTransformImage(blob);
 
-      if (!uploadResponse.ok) {
-        throw new Error("Upload failed.");
+      if (!result.success) {
+        throw new Error(result.error || "Analysis and transformation failed.");
       }
 
-      console.log("Image uploaded successfully.");
-      if (onUploadComplete) onUploadComplete();
+      console.log("Pipeline completed successfully!");
+      console.log("Issues found:", result.issues.length);
+      console.log("Transformed image:", result.transformedImageUrl ? "Available" : "Not available");
+
+      const analysisResults: AnalysisResults = {
+        analysisText: result.analysisText,
+        issues: result.issues,
+        transformedImageUrl: result.transformedImageUrl
+      };
+
+      // Call the completion callback with results
+      if (onUploadComplete) {
+        onUploadComplete(analysisResults);
+      }
+
+      return analysisResults;
 
     } catch (error) {
-      console.error("Error uploading:", error);
-      throw new Error("Failed to upload image.");
+      console.error("Error in image processing pipeline:", error);
+      throw new Error(
+        error instanceof Error ? error.message : "Failed to process image."
+      );
     } finally {
       setIsUploading(false);
     }

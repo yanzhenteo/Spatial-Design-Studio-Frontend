@@ -1,24 +1,25 @@
 import React, { useState, useRef } from 'react';
-import { useCamera } from '../utils/cameraUtils.ts';
+import { useCamera, type AnalysisResults } from '../utils/cameraUtils.ts';
+import { analyzeAndTransformImage } from '../services/imageAnalysisService';
 import DoubleButton from './DoubleButton';
 
 interface CameraStepProps {
   selectedIssues: string[];
-  comments: string;         
-  onNext: () => void;
+  comments: string;
+  onAnalysisComplete: (results: AnalysisResults) => void;
 }
 
 const CameraStep: React.FC<CameraStepProps> = ({
   selectedIssues,
   comments,
-  onNext
+  onAnalysisComplete
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isGalleryUploading, setIsGalleryUploading] = useState(false);
   const [galleryImage, setGalleryImage] = useState<string | null>(null); // New state for gallery image preview
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Use the existing camera hook - DON'T MODIFY THIS
+  // Use the existing camera hook with the new callback
   const {
     isCameraActive,
     capturedImage,
@@ -30,7 +31,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
     captureImage,
     retakePhoto,
     uploadImage,
-  } = useCamera(onNext);
+  } = useCamera(onAnalysisComplete);
 
   // Enhanced camera functions with error handling - using the existing hook functions
   const handleStartCamera = async () => {
@@ -91,41 +92,44 @@ const CameraStep: React.FC<CameraStepProps> = ({
     event.target.value = '';
   };
 
-  // Custom upload flow for gallery images
+  // Custom upload flow for gallery images - now with API integration
   const handleGalleryImageUpload = async () => {
     if (!galleryImage) return;
-    
+
     setIsGalleryUploading(true);
     setCameraError(null);
-    
+
     try {
-      // Convert the object URL back to a file
+      // Convert the object URL back to a blob
       const response = await fetch(galleryImage);
       const blob = await response.blob();
-      const file = new File([blob], "gallery-image.jpg", { type: "image/jpeg" });
 
-      // Upload similar to the camera hook's uploadImage
-      const formData = new FormData();
-      formData.append("image", file);
-      formData.append("selectedIssues", JSON.stringify(selectedIssues));
-      formData.append("comments", comments);
+      console.log("Starting image analysis and transformation pipeline for gallery image...");
+      console.log("Selected issues:", selectedIssues);
+      console.log("Comments:", comments);
 
-      const uploadResponse = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData
-      });
+      // Call the analysis and transformation service (same as camera upload)
+      const result = await analyzeAndTransformImage(blob);
 
-      if (!uploadResponse.ok) {
-        throw new Error("Upload failed.");
+      if (!result.success) {
+        throw new Error(result.error || "Analysis and transformation failed.");
       }
 
-      console.log("Gallery image uploaded successfully.");
-      
-      // Call onNext to proceed to the next step (same as camera upload)
-      onNext();
+      console.log("Pipeline completed successfully!");
+      console.log("Issues found:", result.issues.length);
+      console.log("Transformed image:", result.transformedImageUrl ? "Available" : "Not available");
+
+      const analysisResults: AnalysisResults = {
+        analysisText: result.analysisText,
+        issues: result.issues,
+        transformedImageUrl: result.transformedImageUrl
+      };
+
+      // Call the completion callback with results (same as camera upload)
+      onAnalysisComplete(analysisResults);
 
     } catch (error) {
-      setCameraError(error instanceof Error ? error.message : 'Failed to upload image');
+      setCameraError(error instanceof Error ? error.message : 'Failed to process image');
       console.error('Gallery upload error:', error);
     } finally {
       setIsGalleryUploading(false);

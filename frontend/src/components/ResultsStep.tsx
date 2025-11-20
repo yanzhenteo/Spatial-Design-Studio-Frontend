@@ -1,32 +1,93 @@
 import React from 'react';
+import type { AnalysisResults } from '../utils/cameraUtils';
 
-const ResultsStep: React.FC = () => {
-  return (
-    <div className="w-full mb-6 space-y-4">
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-dark-grey mb-3">Recommendations</h3>
-        <div className="space-y-3">
-          <div className="p-3 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-dark-grey mb-1">Improved Lighting</h4>
-            <p className="text-sm text-gray-600">Consider adding motion-activated night lights in hallways and bathrooms to improve way-finding.</p>
-          </div>
-          <div className="p-3 bg-green-50 rounded-lg">
-            <h4 className="font-medium text-dark-grey mb-1">Organization System</h4>
-            <p className="text-sm text-gray-600">Implement a consistent storage system with labeled containers for frequently used items.</p>
-          </div>
-          <div className="p-3 bg-yellow-50 rounded-lg">
-            <h4 className="font-medium text-dark-grey mb-1">Safety Improvements</h4>
-            <p className="text-sm text-gray-600">Add grab bars in bathrooms and remove tripping hazards from walkways.</p>
-          </div>
+interface ResultsStepProps {
+  analysisResults: AnalysisResults | null;
+}
+
+const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults }) => {
+  // Show loading state if no results yet
+  if (!analysisResults) {
+    return (
+      <div className="w-full mb-6 space-y-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center min-h-[300px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red mb-4"></div>
+          <p className="text-big-text text-dark-grey text-center">
+            Processing your image...
+          </p>
+          <p className="text-sm text-gray-600 text-center mt-2">
+            This may take several minutes
+          </p>
         </div>
       </div>
-      
+    );
+  }
+
+  const { issues, transformedImageUrl } = analysisResults;
+
+  return (
+    <div className="w-full mb-6 space-y-4">
+      {/* Transformed Image Display */}
+      {transformedImageUrl && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-dark-grey mb-3">
+            Improved Space
+          </h3>
+          <div className="bg-gray-100 rounded-lg overflow-hidden">
+            <img
+              src={transformedImageUrl}
+              alt="Transformed space with improvements"
+              className="w-full h-auto"
+            />
+          </div>
+          <p className="text-sm text-gray-600 mt-2 text-center">
+            Preview of recommended improvements
+          </p>
+        </div>
+      )}
+
+      {/* Issues and Recommendations */}
+      {issues && issues.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-dark-grey mb-3">
+            Recommendations ({issues.length})
+          </h3>
+          <div className="space-y-3">
+            {issues.map((issue, index) => (
+              <div
+                key={index}
+                className="p-3 bg-blue-50 rounded-lg border border-blue-100"
+              >
+                <h4 className="font-medium text-dark-grey mb-1">
+                  {issue.element}
+                </h4>
+                <p className="text-sm text-gray-700">{issue.recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No issues found */}
+      {(!issues || issues.length === 0) && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-dark-grey mb-3">
+            Analysis Complete
+          </h3>
+          <p className="text-sm text-gray-600">
+            No specific issues were identified in this space. Your environment
+            appears to be well-suited for accessibility and comfort.
+          </p>
+        </div>
+      )}
+
+      {/* Next Steps */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-dark-grey mb-3">Next Steps</h3>
         <ul className="list-disc list-inside space-y-2 text-sm text-gray-600">
-          <li>Schedule a home safety assessment with our specialist</li>
-          <li>Review recommended products in our online catalog</li>
-          <li>Download your personalized home improvement checklist</li>
+          <li>Review the recommended improvements above</li>
+          <li>Continue to see product recommendations</li>
+          <li>Consider implementing changes gradually</li>
         </ul>
       </div>
     </div>

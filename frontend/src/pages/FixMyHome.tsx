@@ -10,6 +10,7 @@ import ProductRecommendationsStep from '../components/ProductRecommendationsStep
 import IssueSelectionStep from '../components/IssueSelectionStep';
 import CommentsStep from '../components/CommentsStep';
 import StepNavigation from '../components/StepNavigation';
+import type { AnalysisResults } from '../utils/cameraUtils';
 
 interface FixMyHomeProps {
   onBack: () => void;
@@ -19,6 +20,14 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
   const [currentStep, setCurrentStep] = useState<FeatureStep>('step1');
   const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
   const [comments, setComments] = useState('');
+  const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
+
+  // Handle analysis completion from camera/gallery upload
+  const handleAnalysisComplete = useCallback((results: AnalysisResults) => {
+    console.log('Analysis complete, moving to step 4');
+    setAnalysisResults(results);
+    setCurrentStep('step4');
+  }, []);
 
   // Define handleNext first using useCallback to avoid recreation
   const handleNext = useCallback(() => {
@@ -168,13 +177,13 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 <CameraStep
                   selectedIssues={selectedIssues}
                   comments={comments}
-                  onNext={handleNext}
+                  onAnalysisComplete={handleAnalysisComplete}
                 />
               )}
 
               {/* Results content - only show on step4 */}
               {currentStep === 'step4' && (
-                <ResultsStep />
+                <ResultsStep analysisResults={analysisResults} />
               )}
 
               {/* Product recommendations - only show on recommendations step */}
