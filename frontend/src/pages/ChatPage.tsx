@@ -1,12 +1,13 @@
 // src/pages/ChatPage.tsx
 import { motion } from 'framer-motion';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect ,useCallback} from 'react';
 import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
 import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
 import { generateAIQuestion } from '../utils/aiQuestionGenerator';
 import type { ConversationContext } from '../utils/aiQuestionGenerator';
 import type { QuestionItem } from '../components/ToggleQuestionnaire';
+
 
 interface Message {
   id: string;
@@ -117,6 +118,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [currentPhase, setCurrentPhase] = useState<'phase4'>('phase4');
@@ -135,7 +137,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -348,12 +351,118 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       setIsLoading(false);
     }
   };
+    // SPEECH-TO-TEXT: API call function
+  const transcribeAudio = async (audioFile: File) => {
+    const IMAGE_GEN_SERVICE_URL = 'http://127.0.0.1:8002';
+    const formData = new FormData();
+    formData.append('file', audioFile);
 
-  const handleMicClick = () => {
-    setIsRecording(!isRecording);
-    console.log('Microphone clicked, recording:', !isRecording);
-    // TODO: Add speech-to-text logic here
+    try {
+      const response = await fetch(`${IMAGE_GEN_SERVICE_URL}/speech-to-text`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        return {
+          success: true,
+          transcript: result.transcript
+        };
+      } else {
+        throw new Error(result.error || 'Transcription failed');
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to connect to service'
+      };
+    }
   };
+
+  // SPEECH-TO-TEXT: Start recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      console.log('Recording started');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Unable to access microphone. Please check permissions.');
+    }
+  }, []);
+
+  // SPEECH-TO-TEXT: Stop recording and transcribe
+  const stopRecording = useCallback((): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const mediaRecorder = mediaRecorderRef.current;
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        reject(new Error('No active recording'));
+        return;
+      }
+
+      mediaRecorder.onstop = async () => {
+        setIsRecording(false);
+        setIsTranscribing(true);
+
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+
+        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+
+        console.log('Recording stopped, transcribing...');
+
+        try {
+          const result = await transcribeAudio(audioFile);
+          setIsTranscribing(false);
+
+          if (result.success && result.transcript) {
+            console.log('Transcription successful:', result.transcript);
+            resolve(result.transcript);
+          } else {
+            reject(new Error(result.error || 'Transcription failed'));
+          }
+        } catch (error) {
+          setIsTranscribing(false);
+          reject(error);
+        }
+      };
+
+      mediaRecorder.stop();
+    });
+  }, []);
+
+  const handleMicClick = async () => {
+    if (isRecording) {
+      try {
+        console.log('Microphone clicked, recording:', !isRecording);
+        const transcript = await stopRecording();
+        await handleSendMessage(transcript);
+      } catch (error) {
+        console.error('Error stopping recording: ', error);
+        alert('Failed to transcribe audio, Please try again.')
+      }
+    // TODO: Add speech-to-text logic here
+  } else {
+    await startRecording();
+  }
+};
 
   return (
     <motion.div
@@ -568,7 +677,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
             {/* Microphone Button */}
             <button
             onClick={handleMicClick}
-            disabled={hasActiveQuestionnaire || isLoading || phase4Complete}
+            disabled={hasActiveQuestionnaire || isLoading || phase4Complete || isTranscribing}
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
                 isRecording
                 ? 'bg-red text-white animate-pulse'
