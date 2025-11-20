@@ -2,17 +2,19 @@
 import { useState } from 'react';
 
 interface LoginFormProps {
-  onLogin: () => void; // This will now trigger navigation to WelcomePage
+  onLogin: (credentials: { username: string; password: string }) => void;
+  error: string | null;
+  isLoggingIn: boolean;
 }
 
-function LoginForm({ onLogin }: LoginFormProps) {
+const LoginForm: React.FC<LoginFormProps> = ({ onLogin, error, isLoggingIn }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Login attempted with:', { username, password });
-    onLogin();
+    onLogin({ username, password });
   };
 
   return (
@@ -32,6 +34,7 @@ function LoginForm({ onLogin }: LoginFormProps) {
             onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-fill-text text-dark-grey"
             placeholder="Enter your username"
+            disabled={isLoggingIn}
           />
         </div>
 
@@ -45,14 +48,22 @@ function LoginForm({ onLogin }: LoginFormProps) {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-fill-text text-dark-grey"
             placeholder="Enter your password"
+            disabled={isLoggingIn}
           />
         </div>
 
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <span className="block sm:inline">{error}</span>
+          </div>
+        )}
+
         <button
-        type="submit"
-        className="w-full bg-muted-purple text-white py-3 rounded-lg text-button-text transition-transform duration-150 active:bg-dark-purple active:scale-95"
+          type="submit"
+          className="w-full bg-muted-purple text-white py-3 rounded-lg text-button-text transition-transform duration-150 active:bg-dark-purple active:scale-95 disabled:opacity-50"
+          disabled={isLoggingIn || !username || !password}
         >
-        Sign In
+          {isLoggingIn ? 'Signing In...' : 'Sign In'}
         </button>
       </form>
     </div>

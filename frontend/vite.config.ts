@@ -7,5 +7,14 @@ export default defineConfig({
     react(),
     tailwindcss() 
   ],
-  envDir: '../../',
+  server: {
+    proxy: {
+      // This rule tells the dev server to forward any request that starts with '/api'
+      // to your backend server running on port 8000.
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true, // This is recommended to avoid CORS issues
+      },
+    },
+  },
 })

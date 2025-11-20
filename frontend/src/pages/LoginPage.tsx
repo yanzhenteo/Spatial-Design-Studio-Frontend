@@ -10,12 +10,38 @@ interface LoginPageProps {
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = () => {
+  const handleLogin = async (credentials: { username: string; password: string }) => {
     setIsLoggingIn(true);
-    setTimeout(() => {
+    setError(null); // Clear previous errors
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // If the server responds with an error, display it.
+        throw new Error(data.message || 'An unknown error occurred.');
+      }
+
+      // On success, save the auth data (token, etc.) to localStorage.
+      localStorage.setItem('userAuth', JSON.stringify(data));
+      
+      // Call the success handler to navigate to the next page.
       onLoginSuccess();
-    }, 2000);
+
+    } catch (err: any) {
+      setError(err.message);
+      setIsLoggingIn(false); // Stop the loading indicator on error.
+    }
   };
 
   return (
@@ -60,7 +86,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               </motion.div>
 
               {/* Login Form */}
-              <LoginForm onLogin={handleLogin} />
+              <LoginForm onLogin={handleLogin} error={error} isLoggingIn={isLoggingIn} />
             </motion.div>
           ) : (
             <motion.div
