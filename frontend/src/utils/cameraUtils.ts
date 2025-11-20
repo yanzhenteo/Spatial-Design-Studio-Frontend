@@ -112,7 +112,7 @@ export const useCamera = (onUploadComplete?: () => void): CameraHookReturn => {
     }
   };
 
-  const stopCamera = (): void => {
+const stopCamera = (): void => {
     console.log('Stopping camera...');
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
@@ -217,10 +217,19 @@ export const useCamera = (onUploadComplete?: () => void): CameraHookReturn => {
     }
   };
 
+
   // Clean up camera when component unmounts
   useEffect(() => {
     return () => {
-      stopCamera();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
     };
   }, []);
 

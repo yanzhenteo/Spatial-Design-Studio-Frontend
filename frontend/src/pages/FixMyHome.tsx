@@ -2,8 +2,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useCallback } from 'react';
 import HeaderCard from '../components/HeaderCard';
 import ContentCard from '../components/ContentCard';
-import Button from '../components/Button';
-import DoubleButton from '../components/DoubleButton';
 import StepIndicator, { type FeatureStep } from '../components/StepIndicator';
 import BackButton from '../components/BackButton';
 import CameraStep from '../components/CameraStep';
@@ -11,6 +9,7 @@ import ResultsStep from '../components/ResultsStep';
 import ProductRecommendationsStep from '../components/ProductRecommendationsStep';
 import IssueSelectionStep from '../components/IssueSelectionStep';
 import CommentsStep from '../components/CommentsStep';
+import StepNavigation from '../components/StepNavigation';
 
 interface FixMyHomeProps {
   onBack: () => void;
@@ -92,33 +91,23 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     step1: {
       header: "What would you like to fix?",
       content: "You may pick one or more options:",
-      buttonText: "Confirm",
-      onButtonClick: handleStart
     },
     step2: {
       header: formatSelectedIssues() || "Symptom Overview",
       content: "Any further comments or elaboration you would like to add?",
       symptomDescriptions: getSymptomDescriptions().join(' '),
-      buttonText: "Next",
-      onButtonClick: handleNext
     },
     step3: {
       header: formatSelectedIssues() || "Comfort Assessment",
       content: "Let's take a photo of the area you'd like to improve. This will help us provide better recommendations.",
-      buttonText: "Next", 
-      onButtonClick: handleNext
     },
     step4: {
       header: "Results",
       content: "Based on your assessment, here are our recommendations:",
-      buttonText: "Complete",
-      onButtonClick: handleNext
     },
     recommendations: {
       header: "Let's make changes!",
       content: "Here are some recommended products to help implement the improvements:",
-      buttonText: "End",
-      onButtonClick: handleEnd
     }
   };
 
@@ -210,39 +199,15 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 />
               )}
 
-              {/* Buttons */}
-              {currentStep === 'step1' || currentStep === 'recommendations' ? (
-                // Single button for step1 and recommendations steps
-                <Button 
-                  variant="danger" 
-                  onClick={currentConfig.onButtonClick}
-                  disabled={currentStep === 'step1' && selectedIssues.length === 0}
-                >
-                  {currentConfig.buttonText}
-                </Button>
-              ) : currentStep === 'step4' ? (
-                // Single button for step4
-                <Button 
-                  variant="danger" 
-                  onClick={currentConfig.onButtonClick}
-                >
-                  {currentConfig.buttonText}
-                </Button>
-              ) : (
-                // Double buttons for intermediate steps (step2 and step3)
-                <DoubleButton
-                  variant="danger"
-                  leftButton={{
-                    onClick: handleBack,
-                    children: "Back"
-                  }}
-                  rightButton={{
-                    onClick: currentConfig.onButtonClick,
-                    children: currentConfig.buttonText,
-                    disabled: false
-                  }}
-                />
-              )}
+              {/* Step Navigation */}
+              <StepNavigation
+                currentStep={currentStep}
+                onBack={handleBack}
+                onNext={handleNext}
+                onConfirm={handleStart}
+                onEnd={handleEnd}
+                isStep1Disabled={selectedIssues.length === 0}
+              />
             </ContentCard>
           </motion.div>
         </AnimatePresence>
