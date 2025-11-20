@@ -6,7 +6,7 @@ export interface CameraHookReturn {
   capturedImage: string | null;
   isUploading: boolean;
   isVideoReady: boolean;
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   startCamera: () => Promise<void>;
   stopCamera: () => void;
   captureImage: () => void;
@@ -19,217 +19,206 @@ export const useCamera = (onUploadComplete?: () => void): CameraHookReturn => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
+  /**
+   * Start the camera
+   */
   const startCamera = async (): Promise<void> => {
     try {
-      console.log('Starting camera...');
+      console.log("Starting camera...");
       setIsVideoReady(false);
-      
-      // Stop any existing stream first
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
 
-      // Clear any existing timeout
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment', // Use 'user' for front camera if this doesn't work
+      // 1. Get the stream FIRST (Before checking for videoRef)
+      // This prompts the user for permission immediately.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
       });
-      console.log('Camera started successfully');
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        
-        // Remove any existing event listeners
-        videoRef.current.onloadeddata = null;
-        videoRef.current.oncanplay = null;
-        videoRef.current.onplaying = null;
-
-        // Use multiple events to detect when video is ready
-        const onLoadedData = () => {
-          console.log('Video loaded data');
-        };
-
-        const onCanPlay = () => {
-          console.log('Video can play');
-          setIsVideoReady(true);
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-          }
-        };
-
-        const onPlaying = () => {
-          console.log('Video is playing');
-          setIsVideoReady(true);
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-          }
-        };
-
-        videoRef.current.onloadeddata = onLoadedData;
-        videoRef.current.oncanplay = onCanPlay;
-        videoRef.current.onplaying = onPlaying;
-
-        // Start playing the video
-        await videoRef.current.play().catch(error => {
-          console.error('Error playing video:', error);
-          // Even if play fails, try to set as ready if we have a stream
-          if (stream.active) {
-            setIsVideoReady(true);
-          }
-        });
-
-        // Fallback: if video doesn't become ready within 3 seconds, force it
-        timeoutRef.current = window.setTimeout(() => {
-          if (!isVideoReady && stream.active) {
-            console.log('Forcing video ready state after timeout');
-            setIsVideoReady(true);
-          }
-        }, 3000);
-      }
-      
+      console.log("Camera stream acquired.");
       streamRef.current = stream;
+
+      // 2. Update state to Render the <video> element
       setIsCameraActive(true);
       setCapturedImage(null);
-      console.log('Camera state updated, isCameraActive:', true);
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      // Clean up on error
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+
+      // 3. Wait for React to mount the <video> element
+      // We need to give React a moment to render after setting state
+      let videoElement: HTMLVideoElement | null = null;
+      
+      for (let i = 0; i < 15; i++) { // Increased attempts slightly
+        if (videoRef.current) {
+          videoElement = videoRef.current;
+          break;
+        }
+        console.log("Waiting for video element to mount…");
+        await new Promise(resolve => setTimeout(resolve, 50)); // Wait 50ms
       }
-      throw new Error('Unable to access camera. Please make sure you have granted camera permissions.');
+
+      if (!videoElement) {
+        // If it fails, stop the stream we just acquired to prevent memory leaks
+        stream.getTracks().forEach(track => track.stop());
+        throw new Error("Video element is not mounted.");
+      }
+
+      // 4. Attach stream to video element
+      videoElement.srcObject = stream;
+
+      // Clean existing listeners
+      videoElement.onloadeddata = null;
+      videoElement.oncanplay = null;
+      videoElement.onplaying = null;
+
+      // Reliable ready event
+      videoElement.onloadedmetadata = () => {
+        console.log("Video metadata loaded — playing.");
+        videoElement?.play();
+        setIsVideoReady(true);
+      };
+
+      // Fallback
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => {
+        if (!isVideoReady && stream.active) {
+          console.log("Force-ready fallback triggered.");
+          setIsVideoReady(true);
+        }
+      }, 3000);
+
+      console.log("Camera active.");
+
+    } catch (error) {
+      console.error("Camera start error:", error);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setIsCameraActive(false); // Reset state on error
+      throw new Error("Unable to access camera. Please grant permission.");
     }
   };
 
-const stopCamera = (): void => {
-    console.log('Stopping camera...');
+  /**
+   * Stop camera
+   */
+  const stopCamera = (): void => {
+    console.log("Stopping camera…");
+
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop();
-        console.log('Stopped track:', track.kind);
-      });
+      streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
       videoRef.current.onloadeddata = null;
       videoRef.current.oncanplay = null;
       videoRef.current.onplaying = null;
+      videoRef.current.onloadedmetadata = null;
     }
+
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+
     setIsCameraActive(false);
     setIsVideoReady(false);
-    console.log('Camera stopped, isCameraActive:', false);
   };
 
+  /**
+   * Capture image (draw video frame to canvas)
+   */
   const captureImage = (): void => {
-    console.log('Capturing image...');
-    console.log('Video ready state:', isVideoReady);
-    console.log('Video ref current:', videoRef.current);
-    
-    if (videoRef.current && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const context = canvas.getContext('2d');
-      
-      if (context) {
-        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        console.log('Image captured, data URL length:', imageDataUrl.length);
-        setCapturedImage(imageDataUrl);
-        stopCamera();
-      } else {
-        console.error('Could not get canvas context');
-        throw new Error('Failed to capture image. Please try again.');
-      }
-    } else {
-      console.error('Video not ready for capture. Details:', {
-        hasVideoRef: !!videoRef.current,
-        videoWidth: videoRef.current?.videoWidth,
-        videoHeight: videoRef.current?.videoHeight,
-        isVideoReady,
-        srcObject: videoRef.current?.srcObject
-      });
-      throw new Error('Camera not ready for capture. Please wait a moment and try again.');
+    console.log("Capturing image…");
+
+    if (
+      !videoRef.current ||
+      videoRef.current.videoWidth === 0 ||
+      videoRef.current.videoHeight === 0
+    ) {
+      console.error("Cannot capture: video not ready.");
+      throw new Error("Camera not ready for capture. Try again.");
     }
+
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Failed to draw video frame.");
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageDataUrl = canvas.toDataURL("image/jpeg", 0.8);
+
+    console.log("Image captured. Size:", imageDataUrl.length);
+
+    setCapturedImage(imageDataUrl);
+    stopCamera();
   };
 
+  /**
+   * Retake photo → reopen camera
+   */
   const retakePhoto = (): void => {
-    console.log('Retaking photo...');
+    console.log("Retaking photo…");
     setCapturedImage(null);
     startCamera();
   };
 
-  const uploadImage = async (selectedIssues: string[], comments: string): Promise<void> => {
-    if (!capturedImage) {
-      throw new Error('No image to upload');
-    }
+  /**
+   * Upload image to backend
+   */
+  const uploadImage = async (
+    selectedIssues: string[],
+    comments: string
+  ): Promise<void> => {
+    if (!capturedImage) throw new Error("No image to upload.");
 
     setIsUploading(true);
+
     try {
-      // Convert base64 to blob for sending to backend
       const response = await fetch(capturedImage);
       const blob = await response.blob();
-      
-      // Create FormData to send the image
-      const formData = new FormData();
-      formData.append('image', blob, 'captured-image.jpg');
-      formData.append('selectedIssues', JSON.stringify(selectedIssues));
-      formData.append('comments', comments);
 
-      // Send to your backend API
-      const uploadResponse = await fetch('/api/upload-image', {
-        method: 'POST',
-        body: formData,
+      const formData = new FormData();
+      formData.append("image", blob, "captured-image.jpg");
+      formData.append("selectedIssues", JSON.stringify(selectedIssues));
+      formData.append("comments", comments);
+
+      const uploadResponse = await fetch("/api/upload-image", {
+        method: "POST",
+        body: formData
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Upload failed');
+        throw new Error("Upload failed.");
       }
 
-      const result = await uploadResponse.json();
-      console.log('Upload successful:', result);
-      
-      // Call the completion callback if provided
-      if (onUploadComplete) {
-        onUploadComplete();
-      }
+      console.log("Image uploaded successfully.");
+      if (onUploadComplete) onUploadComplete();
+
     } catch (error) {
-      console.error('Error uploading image:', error);
-      throw new Error('Failed to upload image. Please try again.');
+      console.error("Error uploading:", error);
+      throw new Error("Failed to upload image.");
     } finally {
       setIsUploading(false);
     }
   };
 
-
-  // Clean up camera when component unmounts
+  /**
+   * Cleanup on unmount
+   */
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      stopCamera();
     };
   }, []);
 
@@ -238,11 +227,11 @@ const stopCamera = (): void => {
     capturedImage,
     isUploading,
     isVideoReady,
-    videoRef: videoRef as RefObject<HTMLVideoElement>,
+    videoRef,
     startCamera,
     stopCamera,
     captureImage,
     retakePhoto,
-    uploadImage,
+    uploadImage
   };
 };

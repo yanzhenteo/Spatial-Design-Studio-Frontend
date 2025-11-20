@@ -135,10 +135,14 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   }>>({});
   const [phase4Complete, setPhase4Complete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioQueueRef = useRef<string[]>([]);
+  const isProcessingQueueRef = useRef<boolean>(false);
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -146,6 +150,16 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Play the initial message when component mounts
+  useEffect(() => {
+    // Play the first message after a short delay to ensure everything is loaded
+    const timer = setTimeout(() => {
+      textToSpeech("Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:");
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []); // Empty dependency array = run once on mount
 
   const saveConversation = async () => {
     try {
@@ -244,6 +258,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
           };
 
           setMessages(prev => [...prev, aiQuestionMessage]);
+
+          // TEXT-TO-SPEECH: Play the AI question
+          textToSpeech(firstAIQuestion);
           setTopicConversations(prev => ({
             ...prev,
             [currentTopic]: { ...prev[currentTopic], firstAIQuestion }
@@ -279,6 +296,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
           };
 
           setMessages(prev => [...prev, aiQuestionMessage]);
+
+          // TEXT-TO-SPEECH: Play the AI question
+          textToSpeech(secondAIQuestion);
           setTopicConversations(prev => ({
             ...prev,
             [currentTopic]: { ...prev[currentTopic], secondAIQuestion }
@@ -329,6 +349,11 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
             };
 
             setMessages(prev => [...prev, introMessage, nextFixedQuestion]);
+
+            // TEXT-TO-SPEECH: Play both messages
+            textToSpeech(introMessage.text || '');
+            // Wait a bit before playing the second message
+            setTimeout(() => textToSpeech(nextFixedQuestion.text || ''), 2000);
           } else {
             // All topics complete - disable chat
             setPhase4Complete(true);
@@ -340,6 +365,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
               type: 'text'
             };
             setMessages(prev => [...prev, completionMessage]);
+
+            // TEXT-TO-SPEECH: Play completion message
+            textToSpeech(completionMessage.text || '');
           }
 
           setIsLoading(false);
@@ -362,7 +390,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   };
     // SPEECH-TO-TEXT: API call function
   const transcribeAudio = async (audioFile: File) => {
-    const IMAGE_GEN_SERVICE_URL = 'http://127.0.0.1:8002';
+    // Use proxy endpoint to avoid CORS issues
+    const IMAGE_GEN_SERVICE_URL = '/microservice';
     const formData = new FormData();
     formData.append('file', audioFile);
 
@@ -393,6 +422,152 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       };
     }
   };
+
+  // TEXT-TO-SPEECH: Process queue and play audio sequentially
+  const processAudioQueue = useCallback(async () => {
+    if (isProcessingQueueRef.current || audioQueueRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingQueueRef.current = true;
+    console.log('🎵 Starting audio queue processing');
+    console.log('Queue length:', audioQueueRef.current.length);
+
+    while (audioQueueRef.current.length > 0) {
+      const text = audioQueueRef.current.shift();
+      if (!text) continue;
+
+      console.log('\n=== PROCESSING QUEUE ITEM ===');
+      console.log('Remaining in queue:', audioQueueRef.current.length);
+      console.log('Text to convert:', text);
+
+      try {
+        await playTextToSpeech(text);
+      } catch (err) {
+        console.error('Error processing queue item:', err);
+      }
+    }
+
+    isProcessingQueueRef.current = false;
+    console.log('✅ Queue processing complete\n');
+  }, []); // All dependencies are refs or functions that don't change
+
+  // TEXT-TO-SPEECH: Play a single audio file
+  const playTextToSpeech = async (text: string): Promise<void> => {
+    const IMAGE_GEN_SERVICE_URL = '/microservice';
+
+    console.log('=== TEXT-TO-SPEECH PLAYBACK ===');
+    console.log('Text:', text);
+    console.log('Text length:', text.length, 'characters');
+
+    try {
+      setIsSpeaking(true);
+
+      console.log('Sending request to:', `${IMAGE_GEN_SERVICE_URL}/text-to-speech`);
+
+      const response = await fetch(`${IMAGE_GEN_SERVICE_URL}/text-to-speech`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      console.log('TTS API response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('TTS API result:', result);
+
+      if (result.success && result.audio_file_path) {
+        // Get the filename from the path
+        const filename = result.audio_file_path.split(/[/\\]/).pop();
+        console.log('Audio filename:', filename);
+
+        // Fetch the audio file
+        console.log('Downloading audio file...');
+        const audioResponse = await fetch(`${IMAGE_GEN_SERVICE_URL}/download-audio/${filename}`);
+
+        if (!audioResponse.ok) {
+          throw new Error('Failed to download audio');
+        }
+
+        const audioBlob = await audioResponse.blob();
+        console.log('Audio blob size:', audioBlob.size, 'bytes');
+
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // Play the audio and wait for it to finish
+        await new Promise<void>((resolve, reject) => {
+          // Stop previous audio if any
+          if (audioRef.current) {
+            console.log('Stopping previous audio');
+            audioRef.current.pause();
+            audioRef.current.src = '';
+            audioRef.current = null;
+          }
+
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+
+          let hasEnded = false;
+
+          audio.onended = () => {
+            if (hasEnded) return; // Prevent double-firing
+            hasEnded = true;
+            console.log('✅ Audio playback ended');
+            setIsSpeaking(false);
+            // Small delay before revoking URL to prevent premature cleanup
+            setTimeout(() => {
+              URL.revokeObjectURL(audioUrl);
+            }, 100);
+            resolve();
+          };
+
+          audio.onerror = (err) => {
+            if (hasEnded) return; // Already handled
+            hasEnded = true;
+            console.error('❌ Error playing audio:', err);
+            setIsSpeaking(false);
+            setTimeout(() => {
+              URL.revokeObjectURL(audioUrl);
+            }, 100);
+            reject(new Error('Audio playback error'));
+          };
+
+          audio.play().catch((err) => {
+            if (hasEnded) return; // Already handled
+            hasEnded = true;
+            console.error('❌ Error starting playback:', err);
+            setIsSpeaking(false);
+            setTimeout(() => {
+              URL.revokeObjectURL(audioUrl);
+            }, 100);
+            reject(err);
+          });
+
+          console.log('▶️ Playing audio...');
+        });
+      } else {
+        throw new Error(result.error || 'Text-to-speech conversion failed');
+      }
+    } catch (err) {
+      setIsSpeaking(false);
+      console.error('❌ Text-to-speech error:', err);
+      throw err;
+    }
+  };
+
+  // TEXT-TO-SPEECH: Add text to queue and start processing
+  const textToSpeech = useCallback((text: string) => {
+    console.log('➕ Adding to TTS queue:', text);
+    audioQueueRef.current.push(text);
+    console.log('Queue length now:', audioQueueRef.current.length);
+    processAudioQueue();
+  }, [processAudioQueue]);
 
   // SPEECH-TO-TEXT: Start recording
   const startRecording = useCallback(async () => {
@@ -577,6 +752,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                       }
                     };
                     updatedMessages.push(secondQuestionnaire);
+
+                    // TEXT-TO-SPEECH: Play second questionnaire message
+                    setTimeout(() => textToSpeech(secondQuestionnaire.text || ''), 500);
                   } else {
                     // This is the second questionnaire - transition directly to Phase 4
                     const selectedActivities = selectedQuestions.map(q => q.question);
@@ -625,6 +803,12 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
                       // Enable text input for Phase 4
                       setHasActiveQuestionnaire(false);
+
+                      // TEXT-TO-SPEECH: Play both initial messages
+                      setTimeout(() => {
+                        textToSpeech(introMessage.text || '');
+                        setTimeout(() => textToSpeech(fixedQuestionMessage.text || ''), 2000);
+                      }, 500);
                     }
                   }
 

@@ -15,6 +15,12 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true, // This is recommended to avoid CORS issues
       },
+      // Proxy for the speech-to-text microservice
+      '/microservice': {
+        target: 'http://127.0.0.1:8002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/microservice/, ''),
+      },
     },
   },
 })

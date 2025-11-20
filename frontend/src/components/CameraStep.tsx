@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCamera } from '../utils/cameraUtils';
+import { useCamera } from '../utils/cameraUtils.ts';
 
 interface CameraStepProps {
   selectedIssues: string[];
