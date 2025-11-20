@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useCamera } from '../utils/cameraUtils.ts';
+import DoubleButton from './DoubleButton';
 
 interface CameraStepProps {
   selectedIssues: string[];
-  comments: string;
+  comments: string;         
   onNext: () => void;
 }
 
@@ -13,8 +14,11 @@ const CameraStep: React.FC<CameraStepProps> = ({
   onNext
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isGalleryUploading, setIsGalleryUploading] = useState(false);
+  const [galleryImage, setGalleryImage] = useState<string | null>(null); // New state for gallery image preview
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Use the camera hook directly in the component
+  // Use the existing camera hook - DON'T MODIFY THIS
   const {
     isCameraActive,
     capturedImage,
@@ -28,11 +32,11 @@ const CameraStep: React.FC<CameraStepProps> = ({
     uploadImage,
   } = useCamera(onNext);
 
-  // Enhanced camera functions with error handling
+  // Enhanced camera functions with error handling - using the existing hook functions
   const handleStartCamera = async () => {
     setCameraError(null);
     try {
-      await startCamera();
+      await startCamera(); // This uses the existing working function
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to start camera');
     }
@@ -41,7 +45,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
   const handleCaptureImage = () => {
     setCameraError(null);
     try {
-      captureImage();
+      captureImage(); // This uses the existing working function
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to capture image');
     }
@@ -50,14 +54,113 @@ const CameraStep: React.FC<CameraStepProps> = ({
   const handleUploadImage = async () => {
     setCameraError(null);
     try {
-      await uploadImage(selectedIssues, comments);
+      await uploadImage(selectedIssues, comments); // This uses the existing working function
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to upload image');
     }
   };
 
+  // Handle gallery image selection - NEW FUNCTIONALITY
+  const handleUploadImageButton = () => {
+    setCameraError(null);
+    fileInputRef.current?.click();
+  };
+
+  // Handle file selection from gallery - NEW FUNCTIONALITY
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setCameraError('Please select a valid image file (JPEG, PNG, etc.)');
+      return;
+    }
+
+    // Validate file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setCameraError('Image size should be less than 10MB');
+      return;
+    }
+
+    // Create a URL for the selected image and show preview
+    const imageUrl = URL.createObjectURL(file);
+    setGalleryImage(imageUrl);
+
+    // Reset the file input
+    event.target.value = '';
+  };
+
+  // Custom upload flow for gallery images
+  const handleGalleryImageUpload = async () => {
+    if (!galleryImage) return;
+    
+    setIsGalleryUploading(true);
+    setCameraError(null);
+    
+    try {
+      // Convert the object URL back to a file
+      const response = await fetch(galleryImage);
+      const blob = await response.blob();
+      const file = new File([blob], "gallery-image.jpg", { type: "image/jpeg" });
+
+      // Upload similar to the camera hook's uploadImage
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("selectedIssues", JSON.stringify(selectedIssues));
+      formData.append("comments", comments);
+
+      const uploadResponse = await fetch("/api/upload-image", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Upload failed.");
+      }
+
+      console.log("Gallery image uploaded successfully.");
+      
+      // Call onNext to proceed to the next step (same as camera upload)
+      onNext();
+
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : 'Failed to upload image');
+      console.error('Gallery upload error:', error);
+    } finally {
+      setIsGalleryUploading(false);
+    }
+  };
+
+  // Retake gallery image
+  const handleRetakeGalleryImage = () => {
+    if (galleryImage) {
+      URL.revokeObjectURL(galleryImage); // Clean up the object URL
+    }
+    setGalleryImage(null);
+    setCameraError(null);
+  };
+
+  // Clean up object URLs when component unmounts
+  React.useEffect(() => {
+    return () => {
+      if (galleryImage) {
+        URL.revokeObjectURL(galleryImage);
+      }
+    };
+  }, [galleryImage]);
+
   return (
     <div className="w-full mb-6 space-y-4">
+      {/* Hidden file input for gallery upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* Error message */}
       {cameraError && (
         <div className="bg-red bg-opacity-10 border border-red rounded-lg p-3">
@@ -65,8 +168,8 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Camera view */}
-      {isCameraActive && !capturedImage && (
+      {/* Camera view - USING EXISTING HOOK FUNCTIONALITY */}
+      {isCameraActive && !capturedImage && !galleryImage && (
         <div className="space-y-4">
           <div className="relative bg-gray-200 rounded-lg border-2 border-gray-300 min-h-[300px] flex items-center justify-center overflow-hidden">
             <video
@@ -105,8 +208,8 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Captured image preview */}
-      {capturedImage && (
+      {/* Captured image preview - USING EXISTING HOOK FUNCTIONALITY */}
+      {capturedImage && !galleryImage && (
         <div className="space-y-4">
           <div className="bg-gray-200 rounded-lg border-2 border-gray-300 min-h-[300px] flex items-center justify-center">
             <img
@@ -133,14 +236,47 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Start camera button */}
-      {!isCameraActive && !capturedImage && (
-        <button
-          onClick={handleStartCamera}
-          className="w-full bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90"
-        >
-          Open Camera
-        </button>
+      {/* Gallery image preview - NEW FUNCTIONALITY */}
+      {galleryImage && !capturedImage && !isCameraActive && (
+        <div className="space-y-4">
+          <div className="bg-gray-200 rounded-lg border-2 border-gray-300 min-h-[300px] flex items-center justify-center">
+            <img
+              src={galleryImage}
+              alt="Selected from gallery"
+              className="w-full rounded-lg max-h-[400px] object-cover"
+            />
+          </div>
+          <div className="flex space-x-3">
+            <button
+              onClick={handleRetakeGalleryImage}
+              className="flex-1 bg-gray-300 text-dark-grey py-3 rounded-lg text-button-text font-medium hover:opacity-90"
+            >
+              Choose Different Image
+            </button>
+            <button
+              onClick={handleGalleryImageUpload}
+              disabled={isGalleryUploading}
+              className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {isGalleryUploading ? 'Uploading...' : 'Use This Photo'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Double Button - only show when no image is active */}
+      {!isCameraActive && !capturedImage && !galleryImage && (
+        <DoubleButton
+          leftButton={{
+            onClick: handleUploadImageButton,
+            children: "Upload Image"
+          }}
+          rightButton={{
+            onClick: handleStartCamera,
+            children: "Open Camera"
+          }}
+          variant="danger"
+        />
       )}
     </div>
   );
