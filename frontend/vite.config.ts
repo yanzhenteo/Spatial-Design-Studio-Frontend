@@ -1,11 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'path'
 
 export default defineConfig({
+  // Tell Vite to look for .env files in the main repo root
+  envDir: path.resolve(__dirname, '../../'),
   plugins: [
     react(),
-    tailwindcss() 
+    tailwindcss()
   ],
   server: {
     proxy: {
