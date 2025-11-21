@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useCamera, type AnalysisResults } from '../utils/cameraUtils.ts';
 import { analyzeAndTransformImage } from '../services/imageAnalysisService';
 import DoubleButton from './DoubleButton';
@@ -7,15 +7,16 @@ interface CameraStepProps {
   selectedIssues: string[];
   comments: string;
   onAnalysisComplete: (results: AnalysisResults) => void;
+  onImageReady?: (uploadFn: (() => Promise<void>) | null) => void; // New prop to expose upload function
 }
 
 const CameraStep: React.FC<CameraStepProps> = ({
   selectedIssues,
   comments,
-  onAnalysisComplete
+  onAnalysisComplete,
+  onImageReady
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isGalleryUploading, setIsGalleryUploading] = useState(false);
   const [galleryImage, setGalleryImage] = useState<string | null>(null); // New state for gallery image preview
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -23,7 +24,6 @@ const CameraStep: React.FC<CameraStepProps> = ({
   const {
     isCameraActive,
     capturedImage,
-    isUploading,
     isVideoReady,
     videoRef,
     startCamera,
@@ -52,14 +52,34 @@ const CameraStep: React.FC<CameraStepProps> = ({
     }
   };
 
-  const handleUploadImage = async () => {
+  // Use refs to store the latest values without triggering re-renders
+  const selectedIssuesRef = React.useRef(selectedIssues);
+  const commentsRef = React.useRef(comments);
+  const onAnalysisCompleteRef = React.useRef(onAnalysisComplete);
+
+  // Update refs when values change
+  React.useEffect(() => {
+    selectedIssuesRef.current = selectedIssues;
+    commentsRef.current = comments;
+    onAnalysisCompleteRef.current = onAnalysisComplete;
+  }, [selectedIssues, comments, onAnalysisComplete]);
+
+  const handleUploadImage = useCallback(async () => {
     setCameraError(null);
     try {
-      await uploadImage(selectedIssues, comments); // This uses the existing working function
+      console.log("handleUploadImage: Starting upload with issues:", selectedIssuesRef.current);
+      const results = await uploadImage(selectedIssuesRef.current, commentsRef.current);
+      console.log("handleUploadImage: Upload completed, got results:", results);
+      // Explicitly call onAnalysisComplete with the results
+      if (results && onAnalysisCompleteRef.current) {
+        console.log("handleUploadImage: Calling onAnalysisComplete explicitly");
+        onAnalysisCompleteRef.current(results);
+      }
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to upload image');
+      console.error("handleUploadImage: Error during upload:", error);
     }
-  };
+  }, [uploadImage]);
 
   // Handle gallery image selection - NEW FUNCTIONALITY
   const handleUploadImageButton = () => {
@@ -92,21 +112,27 @@ const CameraStep: React.FC<CameraStepProps> = ({
     event.target.value = '';
   };
 
-  // Custom upload flow for gallery images - now with API integration
-  const handleGalleryImageUpload = async () => {
-    if (!galleryImage) return;
+  // Store galleryImage in a ref as well
+  const galleryImageRef = React.useRef(galleryImage);
 
-    setIsGalleryUploading(true);
+  React.useEffect(() => {
+    galleryImageRef.current = galleryImage;
+  }, [galleryImage]);
+
+  // Custom upload flow for gallery images - now with API integration
+  const handleGalleryImageUpload = useCallback(async () => {
+    if (!galleryImageRef.current) return;
+
     setCameraError(null);
 
     try {
       // Convert the object URL back to a blob
-      const response = await fetch(galleryImage);
+      const response = await fetch(galleryImageRef.current);
       const blob = await response.blob();
 
-      console.log("Starting image analysis and transformation pipeline for gallery image...");
-      console.log("Selected issues:", selectedIssues);
-      console.log("Comments:", comments);
+      console.log("handleGalleryImageUpload: Starting image analysis and transformation pipeline for gallery image...");
+      console.log("handleGalleryImageUpload: Selected issues:", selectedIssuesRef.current);
+      console.log("handleGalleryImageUpload: Comments:", commentsRef.current);
 
       // Call the analysis and transformation service (same as camera upload)
       const result = await analyzeAndTransformImage(blob);
@@ -115,9 +141,9 @@ const CameraStep: React.FC<CameraStepProps> = ({
         throw new Error(result.error || "Analysis and transformation failed.");
       }
 
-      console.log("Pipeline completed successfully!");
-      console.log("Issues found:", result.issues.length);
-      console.log("Transformed image:", result.transformedImageUrl ? "Available" : "Not available");
+      console.log("handleGalleryImageUpload: Pipeline completed successfully!");
+      console.log("handleGalleryImageUpload: Issues found:", result.issues.length);
+      console.log("handleGalleryImageUpload: Transformed image:", result.transformedImageUrl ? "Available" : "Not available");
 
       const analysisResults: AnalysisResults = {
         analysisText: result.analysisText,
@@ -126,15 +152,30 @@ const CameraStep: React.FC<CameraStepProps> = ({
       };
 
       // Call the completion callback with results (same as camera upload)
-      onAnalysisComplete(analysisResults);
+      if (onAnalysisCompleteRef.current) {
+        console.log("handleGalleryImageUpload: Calling onAnalysisComplete");
+        onAnalysisCompleteRef.current(analysisResults);
+      }
 
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to process image');
-      console.error('Gallery upload error:', error);
-    } finally {
-      setIsGalleryUploading(false);
+      console.error('handleGalleryImageUpload: Error during upload:', error);
     }
-  };
+  }, []);
+
+  // Expose upload functions when images are ready
+  React.useEffect(() => {
+    if (!onImageReady) return;
+
+    if (capturedImage) {
+      onImageReady(handleUploadImage);
+    } else if (galleryImage) {
+      onImageReady(handleGalleryImageUpload);
+    } else {
+      onImageReady(null); // Clear the upload function when no image
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capturedImage, galleryImage, handleUploadImage, handleGalleryImageUpload]);
 
   // Retake gallery image
   const handleRetakeGalleryImage = () => {
@@ -230,11 +271,10 @@ const CameraStep: React.FC<CameraStepProps> = ({
               Retake
             </button>
             <button
-              onClick={handleUploadImage}
-              disabled={isUploading}
-              className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90 disabled:opacity-50"
+              onClick={retakePhoto}
+              className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90"
             >
-              {isUploading ? 'Uploading...' : 'Use This Photo'}
+              Clear Selection
             </button>
           </div>
         </div>
@@ -252,17 +292,16 @@ const CameraStep: React.FC<CameraStepProps> = ({
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={handleRetakeGalleryImage}
+              onClick={handleUploadImageButton}
               className="flex-1 bg-gray-300 text-dark-grey py-3 rounded-lg text-button-text font-medium hover:opacity-90"
             >
               Choose Different Image
             </button>
             <button
-              onClick={handleGalleryImageUpload}
-              disabled={isGalleryUploading}
-              className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90 disabled:opacity-50"
+              onClick={handleRetakeGalleryImage}
+              className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90"
             >
-              {isGalleryUploading ? 'Uploading...' : 'Use This Photo'}
+              Clear Selection
             </button>
           </div>
         </div>

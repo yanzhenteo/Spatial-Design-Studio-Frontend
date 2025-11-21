@@ -10,6 +10,7 @@ interface StepNavigationProps {
   onConfirm?: () => void;
   onEnd?: () => void;
   isStep1Disabled?: boolean;
+  isStep3Disabled?: boolean;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   onConfirm,
   onEnd,
   isStep1Disabled = false,
+  isStep3Disabled = false,
   className = ''
 }) => {
   // Step configurations for button text and click handlers
@@ -86,7 +88,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
       rightButton={{
         onClick: currentConfig.onClick,
         children: currentConfig.buttonText,
-        disabled: false
+        disabled: currentStep === 'step3' ? isStep3Disabled : false
       }}
       className={className}
     />

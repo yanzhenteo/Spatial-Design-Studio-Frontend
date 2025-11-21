@@ -6,17 +6,13 @@ interface ResultsStepProps {
 }
 
 const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults }) => {
-  // Show loading state if no results yet
+  // If no results, show a message (loading is now handled in FixMyHome)
   if (!analysisResults) {
     return (
       <div className="w-full mb-6 space-y-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center min-h-[300px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red mb-4"></div>
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
           <p className="text-big-text text-dark-grey text-center">
-            Processing your image...
-          </p>
-          <p className="text-sm text-gray-600 text-center mt-2">
-            This may take several minutes
+            No results available yet.
           </p>
         </div>
       </div>
