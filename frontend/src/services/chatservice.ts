@@ -1,5 +1,6 @@
 // src/services/chatService.ts
 import type { QuestionItem } from '../components/ToggleQuestionnaire';
+import type { Message } from '../types/chat.types';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -139,3 +140,111 @@ export const chatService = {
     return response.json();
   },
 };
+
+// ============================================================================
+// QUESTIONNAIRE UTILITIES
+// ============================================================================
+
+export interface QuestionnaireCompletionResult {
+  userResponseMessage: Message;
+  nextQuestionnaire?: Message;
+  phase4Messages?: Message[];
+  shouldTransitionToPhase4: boolean;
+  selectedActivities?: string[];
+}
+
+/**
+ * Handles the completion of a questionnaire and generates appropriate responses
+ * @param selectedQuestions - The questions that were selected
+ * @param isFirstQuestionnaire - Whether this is the symptom questionnaire
+ * @param onPlayTTS - Callback to play text-to-speech
+ * @returns Result containing messages and next actions
+ */
+export function handleQuestionnaireCompletion(
+  selectedQuestions: QuestionItem[],
+  isFirstQuestionnaire: boolean,
+  onPlayTTS: (text: string, delay?: number) => void
+): QuestionnaireCompletionResult {
+  // Convert questions to natural language statements
+  const naturalLanguageResponses = selectedQuestions
+    .map(q => {
+      if (isFirstQuestionnaire) {
+        return questionToStatement(q.question);
+      } else {
+        return activityToStatement(q.question);
+      }
+    })
+    .join(' and ');
+
+  const userResponseMessage: Message = {
+    id: (Date.now() + Math.random()).toString(),
+    text: naturalLanguageResponses + '.',
+    isUser: true,
+    timestamp: new Date()
+  };
+
+  // First questionnaire: return second questionnaire
+  if (isFirstQuestionnaire) {
+    const secondQuestionnaire: Message = {
+      id: (Date.now() + Math.random() + 1).toString(),
+      text: ACTIVITY_SELECTION_MESSAGE,
+      isUser: false,
+      timestamp: new Date(),
+      type: 'questionnaire',
+      questionnaire: {
+        initialMessage: ACTIVITY_SELECTION_MESSAGE,
+        maxSelections: MAX_ACTIVITY_SELECTIONS,
+        questions: ACTIVITY_TOPICS
+      }
+    };
+
+    // Play TTS after short delay
+    setTimeout(() => onPlayTTS(ACTIVITY_SELECTION_MESSAGE), 500);
+
+    return {
+      userResponseMessage,
+      nextQuestionnaire: secondQuestionnaire,
+      shouldTransitionToPhase4: false
+    };
+  }
+
+  // Second questionnaire: transition to Phase 4
+  const selectedActivities = selectedQuestions.map(q => q.question);
+
+  if (selectedActivities.length > 0) {
+    const firstTopic = selectedActivities[0];
+    const introMessage: Message = {
+      id: (Date.now() + Math.random()).toString(),
+      text: `Let's talk about ${firstTopic}.`,
+      isUser: false,
+      timestamp: new Date(),
+      type: 'text'
+    };
+
+    const fixedQuestionMessage: Message = {
+      id: (Date.now() + Math.random() + 1).toString(),
+      text: generateProbingQuestions([firstTopic])[0].text || '',
+      isUser: false,
+      timestamp: new Date(),
+      type: 'text'
+    };
+
+    // Play both messages with delays
+    setTimeout(() => {
+      onPlayTTS(introMessage.text || '');
+      setTimeout(() => onPlayTTS(fixedQuestionMessage.text || ''), 2000);
+    }, 500);
+
+    return {
+      userResponseMessage,
+      phase4Messages: [introMessage, fixedQuestionMessage],
+      shouldTransitionToPhase4: true,
+      selectedActivities
+    };
+  }
+
+  return {
+    userResponseMessage,
+    shouldTransitionToPhase4: false
+  };
+}

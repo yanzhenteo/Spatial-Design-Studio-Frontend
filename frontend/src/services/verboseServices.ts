@@ -1,4 +1,5 @@
 // src/services/verboseServices.ts
+import { useState, useRef, useCallback } from 'react';
 
 const IMAGE_GEN_SERVICE_URL = '/microservice';
 
@@ -224,6 +225,95 @@ export async function textToSpeechComplete(text: string): Promise<HTMLAudioEleme
 
   // Play audio
   return await playAudio(audioBlob);
+}
+
+// ============================================================================
+// CUSTOM HOOKS
+// ============================================================================
+
+/**
+ * Custom hook for managing voice recording and transcription
+ */
+export function useVoiceRecording() {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  const startRecordingHook = useCallback(async () => {
+    try {
+      const { mediaRecorder, chunks } = await startRecording();
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = chunks;
+      setIsRecording(true);
+      console.log('Recording started');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      throw error;
+    }
+  }, []);
+
+  const stopRecordingAndTranscribe = useCallback(async (): Promise<string> => {
+    const mediaRecorder = mediaRecorderRef.current;
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      throw new Error('No active recording');
+    }
+
+    try {
+      setIsRecording(false);
+      setIsTranscribing(true);
+
+      const audioFile = await stopRecording(mediaRecorder, chunksRef.current);
+      console.log('Recording stopped, transcribing...');
+
+      const result = await transcribeAudio(audioFile);
+      setIsTranscribing(false);
+
+      if (result.success && result.transcript) {
+        console.log('Transcription successful:', result.transcript);
+        return result.transcript;
+      } else {
+        throw new Error(result.error || 'Transcription failed');
+      }
+    } catch (error) {
+      setIsTranscribing(false);
+      throw error;
+    }
+  }, []);
+
+  return {
+    isRecording,
+    isTranscribing,
+    startRecording: startRecordingHook,
+    stopRecordingAndTranscribe
+  };
+}
+
+/**
+ * Custom hook for managing audio queue and text-to-speech playback
+ */
+export function useAudioPlayer() {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const audioQueueManager = useRef<AudioQueueManager>(
+    new AudioQueueManager(setIsSpeaking)
+  ).current;
+
+  const speak = useCallback((text: string) => {
+    audioQueueManager.enqueue(text);
+  }, [audioQueueManager]);
+
+  const clearQueue = useCallback(() => {
+    audioQueueManager.clear();
+  }, [audioQueueManager]);
+
+  return {
+    isSpeaking,
+    speak,
+    clearQueue,
+    queueLength: audioQueueManager.getQueueLength(),
+    isActive: audioQueueManager.isActive()
+  };
 }
 
 // ============================================================================

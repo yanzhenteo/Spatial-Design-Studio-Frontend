@@ -1,4 +1,5 @@
 // src/services/conversationService.ts
+import { useState, useCallback } from 'react';
 import { generateAIQuestion } from '../utils/aiQuestionGenerator';
 import type { ConversationContext } from '../utils/aiQuestionGenerator';
 import { generateProbingQuestions } from './chatservice';
@@ -237,4 +238,70 @@ export function handleTopicTransition(
   }
 
   return result;
+}
+
+// ============================================================================
+// CUSTOM HOOKS
+// ============================================================================
+
+/**
+ * Custom hook for managing conversation flow state
+ */
+export function useConversationFlow() {
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
+  const [topicConversations, setTopicConversations] = useState<Record<string, TopicConversation>>({});
+  const [phase4Complete, setPhase4Complete] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState<'phase4'>('phase4');
+
+  const initializeTopicConversations = useCallback((topics: string[]) => {
+    const initialConversations: Record<string, TopicConversation> = {};
+    topics.forEach(topic => {
+      initialConversations[topic] = {
+        fixedQuestion: generateProbingQuestions([topic])[0].text || ''
+      };
+    });
+    setTopicConversations(initialConversations);
+    setSelectedTopics(topics);
+    setCurrentTopicIndex(0);
+    setCurrentPhase('phase4');
+  }, []);
+
+  const updateTopicConversations = useCallback((updated: Record<string, TopicConversation>) => {
+    setTopicConversations(updated);
+  }, []);
+
+  const moveToNextTopic = useCallback(() => {
+    setCurrentTopicIndex(prev => prev + 1);
+  }, []);
+
+  const completePhase4 = useCallback(() => {
+    setPhase4Complete(true);
+  }, []);
+
+  const resetConversationFlow = useCallback(() => {
+    setSelectedTopics([]);
+    setCurrentTopicIndex(0);
+    setTopicConversations({});
+    setPhase4Complete(false);
+    setCurrentPhase('phase4');
+  }, []);
+
+  return {
+    // State
+    selectedTopics,
+    currentTopicIndex,
+    topicConversations,
+    phase4Complete,
+    currentPhase,
+    // Actions
+    initializeTopicConversations,
+    updateTopicConversations,
+    moveToNextTopic,
+    completePhase4,
+    resetConversationFlow,
+    // Setters (for direct updates if needed)
+    setCurrentTopicIndex,
+    setPhase4Complete
+  };
 }
