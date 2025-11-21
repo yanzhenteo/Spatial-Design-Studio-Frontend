@@ -1,6 +1,6 @@
 // src/pages/ChatPage.tsx
 import { motion } from 'framer-motion';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
 import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
@@ -15,16 +15,15 @@ import {
   MAX_ACTIVITY_SELECTIONS
 } from '../services/chatservice';
 import {
-  transcribeAudio,
-  startRecording as startAudioRecording,
-  stopRecording as stopAudioRecording,
-  AudioQueueManager
+  useAudioPlayer,
+  useVoiceRecording
 } from '../services/verboseServices';
 import {
   saveConversation as saveConversationAPI,
   prepareConversationData,
   handleTopicConversationStep,
-  handleTopicTransition
+  handleTopicTransition,
+  useConversationFlow
 } from '../services/conversationService';
 import type { Message } from '../types/chat.types';
 
@@ -48,43 +47,33 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [currentPhase, setCurrentPhase] = useState<'phase4'>('phase4');
-
-  // Phase 4 state for topic-by-topic flow
-  const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
-  const [topicConversations, setTopicConversations] = useState<Record<string, {
-    fixedQuestion: string;
-    fixedAnswer?: string;
-    firstAIQuestion?: string;
-    firstAIAnswer?: string;
-    secondAIQuestion?: string;
-    secondAIAnswer?: string;
-  }>>({});
-  const [phase4Complete, setPhase4Complete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [, setIsSpeaking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
 
-  // Initialize AudioQueueManager
-  const audioQueueManager = useMemo(
-    () => new AudioQueueManager(setIsSpeaking),
-    []
-  );
+  // Use custom hooks for state management
+  const { speak: textToSpeech } = useAudioPlayer();
+  const {
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecordingAndTranscribe
+  } = useVoiceRecording();
+  const {
+    selectedTopics,
+    currentTopicIndex,
+    topicConversations,
+    phase4Complete,
+    currentPhase,
+    initializeTopicConversations,
+    updateTopicConversations,
+    setCurrentTopicIndex,
+    setPhase4Complete
+  } = useConversationFlow();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  // Helper function to use queue manager
-  const textToSpeech = (text: string) => {
-    audioQueueManager.enqueue(text);
   };
 
   useEffect(() => {
@@ -95,12 +84,11 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   useEffect(() => {
     // Play the first message after a short delay to ensure everything is loaded
     const timer = setTimeout(() => {
-      audioQueueManager.enqueue(INITIAL_SYMPTOM_MESSAGE);
+      textToSpeech(INITIAL_SYMPTOM_MESSAGE);
     }, 1000);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array = run once on mount
+  }, [textToSpeech]); // textToSpeech is stable from the hook
 
   const saveConversation = async () => {
     try {
@@ -167,7 +155,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
         // Update state with new conversation data
         if (stepResult.updatedTopicConversations) {
-          setTopicConversations(stepResult.updatedTopicConversations);
+          updateTopicConversations(stepResult.updatedTopicConversations);
         }
 
         // Add AI messages to chat
@@ -192,7 +180,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
           // Update state based on transition
           if (transitionResult.updatedTopicConversations) {
-            setTopicConversations(transitionResult.updatedTopicConversations);
+            updateTopicConversations(transitionResult.updatedTopicConversations);
           }
 
           if (transitionResult.nextTopicIndex !== undefined) {
@@ -237,67 +225,25 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     }
   };
 
-  // SPEECH-TO-TEXT: Start recording
-  const startRecording = async () => {
-    try {
-      const { mediaRecorder, chunks } = await startAudioRecording();
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = chunks;
-      setIsRecording(true);
-      console.log('Recording started');
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Unable to access microphone. Please check permissions.');
-    }
-  };
-
-  // SPEECH-TO-TEXT: Stop recording and transcribe
-  const stopRecording = async (): Promise<string> => {
-    const mediaRecorder = mediaRecorderRef.current;
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      throw new Error('No active recording');
-    }
-
-    try {
-      setIsRecording(false);
-      setIsTranscribing(true);
-
-      // Use the service function to stop recording
-      const audioFile = await stopAudioRecording(mediaRecorder, chunksRef.current);
-
-      console.log('Recording stopped, transcribing...');
-
-      // Use the service function to transcribe
-      const result = await transcribeAudio(audioFile);
-      setIsTranscribing(false);
-
-      if (result.success && result.transcript) {
-        console.log('Transcription successful:', result.transcript);
-        return result.transcript;
-      } else {
-        throw new Error(result.error || 'Transcription failed');
-      }
-    } catch (error) {
-      setIsTranscribing(false);
-      throw error;
-    }
-  };
-
   const handleMicClick = async () => {
     if (isRecording) {
       try {
-        console.log('Microphone clicked, recording:', !isRecording);
-        const transcript = await stopRecording();
+        console.log('Microphone clicked, stopping recording');
+        const transcript = await stopRecordingAndTranscribe();
         await handleSendMessage(transcript);
       } catch (error) {
         console.error('Error stopping recording: ', error);
         alert('Failed to transcribe audio, Please try again.')
       }
-    // TODO: Add speech-to-text logic here
-  } else {
-    await startRecording();
-  }
-};
+    } else {
+      try {
+        await startRecording();
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Unable to access microphone. Please check permissions.');
+      }
+    }
+  };
 
   return (
     <motion.div
@@ -396,27 +342,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                   } else {
                     // This is the second questionnaire - transition directly to Phase 4
                     const selectedActivities = selectedQuestions.map(q => q.question);
-                    setSelectedTopics(selectedActivities);
 
-                    // Set phase to 4 immediately after topic selection
-                    setCurrentPhase('phase4');
-                    setCurrentTopicIndex(0);
-
-                    // Initialize conversation tracking for each topic
-                    const initialConversations: Record<string, {
-                      fixedQuestion: string;
-                      fixedAnswer?: string;
-                      firstAIQuestion?: string;
-                      firstAIAnswer?: string;
-                      secondAIQuestion?: string;
-                      secondAIAnswer?: string;
-                    }> = {};
-                    selectedActivities.forEach(topic => {
-                      initialConversations[topic] = {
-                        fixedQuestion: generateProbingQuestions([topic])[0].text || ''
-                      };
-                    });
-                    setTopicConversations(initialConversations);
+                    // Initialize conversation flow with selected activities
+                    initializeTopicConversations(selectedActivities);
 
                     if (selectedActivities.length > 0) {
                       // Start Phase 4: Introduce first topic and ask fixed question
