@@ -7,6 +7,26 @@ import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
 import { generateAIQuestion } from '../utils/aiQuestionGenerator';
 import type { ConversationContext } from '../utils/aiQuestionGenerator';
 import type { QuestionItem } from '../components/ToggleQuestionnaire';
+import {
+  questionToStatement,
+  activityToStatement,
+  generateProbingQuestions,
+  SYMPTOM_QUESTIONS,
+  ACTIVITY_TOPICS,
+  INITIAL_SYMPTOM_MESSAGE,
+  ACTIVITY_SELECTION_MESSAGE,
+  MAX_ACTIVITY_SELECTIONS
+} from '../services/chatservice';
+import {
+  transcribeAudio,
+  startRecording as startAudioRecording,
+  stopRecording as stopAudioRecording,
+  textToSpeechComplete
+} from '../services/verboseServices';
+import {
+  saveConversation as saveConversationAPI,
+  prepareConversationData
+} from '../services/conversationService';
 
 
 interface Message {
@@ -27,92 +47,17 @@ interface ChatPageProps {
   onNext?: () => void;
 }
 
-// Function to convert questions to natural language statements
-function questionToStatement(question: string): string {
-  const conversions: Record<string, string> = {
-    'Does the patient misjudge steps, edges, or depth?': 'I misjudge steps, edges, or depth.',
-    'Do patterned floors or shiny surfaces cause confusion?': 'Patterned floors or shiny surfaces cause me confusion.',
-    'Do they struggle with glare or bright light?': 'I struggle with glare or bright light.',
-    'Do mirrors ever cause confusion or distress?': 'Mirrors sometimes cause me confusion or distress.',
-    'Do they go to the wrong door when trying to leave a room?': 'I sometimes go to the wrong door when trying to leave a room.',
-    'Do they go toward an exit instead of the bathroom when waking up at night?': 'I sometimes go toward an exit instead of the bathroom when waking up at night.',
-    'Have they slipped or nearly fallen in the bathroom recently?': 'I have slipped or nearly fallen in the bathroom recently.',
-    'Do they have difficulty using stairs safely?': 'I have difficulty using stairs safely.',
-    'Do they lose track of where items are stored unless they\'re visible?': 'I lose track of where items are stored unless they\'re visible.',
-    'Do they struggle with clutter or too many objects on a surface?': 'I struggle with clutter or too many objects on a surface.',
-  };
-
-  return conversions[question] || question;
-}
-
-// Function to convert activities to natural language statements
-function activityToStatement(activity: string): string {
-  const conversions: Record<string, string> = {
-    'Food & cooking': 'Food & cooking',
-    'Music & songs': 'Music & songs',
-    'Nature & outdoors': 'Nature & outdoors',
-    'Travel & places': 'Travel & places',
-    'Sports & movement': 'Sports & movement',
-    'Work & skills': 'Work & skills',
-    'Family & relationships': 'Family & relationships',
-    'Celebrations & traditions': 'Celebrations & traditions',
-    'Spirituality / faith': 'Spirituality / faith',
-    'Movies / TV / stories': 'Movies / TV / stories',
-    'Art / crafts / making things': 'Art / crafts / making things',
-    'Pets & animals': 'Pets & animals',
-  };
-
-  return conversions[activity] || activity;
-}
-
-// Function to generate probing questions based on selected activities
-function generateProbingQuestions(activities: string[]): Message[] {
-  const questionMap: Record<string, string> = {
-    'Food & cooking': 'What food or meal always makes them happy?',
-    'Music & songs': 'What music, song, or sound brings them joy or calm?',
-    'Nature & outdoors': 'Is there a place in nature they love or talk about often?',
-    'Travel & places': 'What city, country, or place holds special memories for them?',
-    'Sports & movement': 'Is there a sport or team they love, watch, or used to play?',
-    'Work & skills': 'What kind of work or skill made them feel proud or confident?',
-    'Family & relationships': 'Which people from their life do they talk about the most?',
-    'Celebrations & traditions': 'Is there a holiday or tradition they especially look forward to?',
-    'Spirituality / faith': 'Do they have a meaningful spiritual practice or place of worship?',
-    'Movies / TV / stories': 'What movie, show, or story do they enjoy or rewatch?',
-    'Art / crafts / making things': 'Do they enjoy making, drawing, or crafting anything in particular?',
-    'Pets & animals': 'Have they ever had a favorite pet or animal they loved?',
-  };
-
-  return activities.map((activity, index) => ({
-    id: (Date.now() + Math.random() + index).toString(),
-    text: questionMap[activity] || `Tell me more about ${activity}`,
-    isUser: false,
-    timestamp: new Date(),
-    type: 'text'
-  }));
-}
-
 function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:",
+      text: INITIAL_SYMPTOM_MESSAGE,
       isUser: false,
       timestamp: new Date(),
       type: 'questionnaire',
       questionnaire: {
-        initialMessage: "Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:",
-        questions: [
-          { id: 'q1', question: 'Does the patient misjudge steps, edges, or depth?', selected: false },
-          { id: 'q2', question: 'Do patterned floors or shiny surfaces cause confusion?', selected: false },
-          { id: 'q3', question: 'Do they struggle with glare or bright light?', selected: false },
-          { id: 'q4', question: 'Do mirrors ever cause confusion or distress?', selected: false },
-          { id: 'q5', question: 'Do they go to the wrong door when trying to leave a room?', selected: false },
-          { id: 'q6', question: 'Do they go toward an exit instead of the bathroom when waking up at night?', selected: false },
-          { id: 'q7', question: 'Have they slipped or nearly fallen in the bathroom recently?', selected: false },
-          { id: 'q8', question: 'Do they have difficulty using stairs safely?', selected: false },
-          { id: 'q9', question: 'Do they lose track of where items are stored unless they\'re visible?', selected: false },
-          { id: 'q10', question: 'Do they struggle with clutter or too many objects on a surface?', selected: false },
-        ]
+        initialMessage: INITIAL_SYMPTOM_MESSAGE,
+        questions: SYMPTOM_QUESTIONS
       }
     }
   ]);
@@ -135,7 +80,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   }>>({});
   const [phase4Complete, setPhase4Complete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [, setIsSpeaking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -155,7 +100,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   useEffect(() => {
     // Play the first message after a short delay to ensure everything is loaded
     const timer = setTimeout(() => {
-      textToSpeech("Good Evening, I am Mei Ling! Please help me fill in this quick questionnaire regarding your symptoms:");
+      textToSpeech(INITIAL_SYMPTOM_MESSAGE);
     }, 1000);
 
     return () => clearTimeout(timer);
@@ -165,40 +110,22 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     try {
       setIsSubmitting(true);
 
-      // Prepare conversation data
-      const conversationData = {
+      // Prepare conversation data using the service
+      const conversationData = prepareConversationData(
         selectedTopics,
         topicConversations,
-        allMessages: messages,
-        timestamp: new Date().toISOString()
-      };
+        messages
+      );
 
-      // Get the auth token from localStorage
-      const userAuth = localStorage.getItem('userAuth');
-      if (!userAuth) {
-        throw new Error('User not authenticated. Cannot save conversation.');
+      // Save using the service
+      const result = await saveConversationAPI(conversationData);
+
+      if (result.success) {
+        // Navigate to PostMemoryBot after successful save
+        onNext?.();
+      } else {
+        throw new Error(result.error || 'Failed to save conversation');
       }
-      const { token } = JSON.parse(userAuth);
-
-      // Call backend endpoint to save conversation
-      const response = await fetch('/api/conversations/save', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add the Authorization header with the user's token
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(conversationData)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to save conversation: ${response.status}`);
-      }
-
-      console.log('Conversation saved successfully');
-
-      // Navigate to PostMemoryBot after successful save
-      onNext?.();
     } catch (error) {
       console.error('Error saving conversation:', error);
       // Show error message but still allow navigation
@@ -388,40 +315,6 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       setIsLoading(false);
     }
   };
-    // SPEECH-TO-TEXT: API call function
-  const transcribeAudio = async (audioFile: File) => {
-    // Use proxy endpoint to avoid CORS issues
-    const IMAGE_GEN_SERVICE_URL = '/microservice';
-    const formData = new FormData();
-    formData.append('file', audioFile);
-
-    try {
-      const response = await fetch(`${IMAGE_GEN_SERVICE_URL}/speech-to-text`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        return {
-          success: true,
-          transcript: result.transcript
-        };
-      } else {
-        throw new Error(result.error || 'Transcription failed');
-      }
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Failed to connect to service'
-      };
-    }
-  };
 
   // TEXT-TO-SPEECH: Process queue and play audio sequentially
   const processAudioQueue = useCallback(async () => {
@@ -442,124 +335,30 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       console.log('Text to convert:', text);
 
       try {
-        await playTextToSpeech(text);
+        setIsSpeaking(true);
+
+        // Stop previous audio if any
+        if (audioRef.current) {
+          console.log('Stopping previous audio');
+          audioRef.current.pause();
+          audioRef.current.src = '';
+          audioRef.current = null;
+        }
+
+        // Use the service function
+        const audio = await textToSpeechComplete(text);
+        audioRef.current = audio;
+
+        setIsSpeaking(false);
       } catch (err) {
         console.error('Error processing queue item:', err);
+        setIsSpeaking(false);
       }
     }
 
     isProcessingQueueRef.current = false;
     console.log('✅ Queue processing complete\n');
   }, []); // All dependencies are refs or functions that don't change
-
-  // TEXT-TO-SPEECH: Play a single audio file
-  const playTextToSpeech = async (text: string): Promise<void> => {
-    const IMAGE_GEN_SERVICE_URL = '/microservice';
-
-    console.log('=== TEXT-TO-SPEECH PLAYBACK ===');
-    console.log('Text:', text);
-    console.log('Text length:', text.length, 'characters');
-
-    try {
-      setIsSpeaking(true);
-
-      console.log('Sending request to:', `${IMAGE_GEN_SERVICE_URL}/text-to-speech`);
-
-      const response = await fetch(`${IMAGE_GEN_SERVICE_URL}/text-to-speech`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      console.log('TTS API response status:', response.status);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      console.log('TTS API result:', result);
-
-      if (result.success && result.audio_file_path) {
-        // Get the filename from the path
-        const filename = result.audio_file_path.split(/[/\\]/).pop();
-        console.log('Audio filename:', filename);
-
-        // Fetch the audio file
-        console.log('Downloading audio file...');
-        const audioResponse = await fetch(`${IMAGE_GEN_SERVICE_URL}/download-audio/${filename}`);
-
-        if (!audioResponse.ok) {
-          throw new Error('Failed to download audio');
-        }
-
-        const audioBlob = await audioResponse.blob();
-        console.log('Audio blob size:', audioBlob.size, 'bytes');
-
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        // Play the audio and wait for it to finish
-        await new Promise<void>((resolve, reject) => {
-          // Stop previous audio if any
-          if (audioRef.current) {
-            console.log('Stopping previous audio');
-            audioRef.current.pause();
-            audioRef.current.src = '';
-            audioRef.current = null;
-          }
-
-          const audio = new Audio(audioUrl);
-          audioRef.current = audio;
-
-          let hasEnded = false;
-
-          audio.onended = () => {
-            if (hasEnded) return; // Prevent double-firing
-            hasEnded = true;
-            console.log('✅ Audio playback ended');
-            setIsSpeaking(false);
-            // Small delay before revoking URL to prevent premature cleanup
-            setTimeout(() => {
-              URL.revokeObjectURL(audioUrl);
-            }, 100);
-            resolve();
-          };
-
-          audio.onerror = (err) => {
-            if (hasEnded) return; // Already handled
-            hasEnded = true;
-            console.error('❌ Error playing audio:', err);
-            setIsSpeaking(false);
-            setTimeout(() => {
-              URL.revokeObjectURL(audioUrl);
-            }, 100);
-            reject(new Error('Audio playback error'));
-          };
-
-          audio.play().catch((err) => {
-            if (hasEnded) return; // Already handled
-            hasEnded = true;
-            console.error('❌ Error starting playback:', err);
-            setIsSpeaking(false);
-            setTimeout(() => {
-              URL.revokeObjectURL(audioUrl);
-            }, 100);
-            reject(err);
-          });
-
-          console.log('▶️ Playing audio...');
-        });
-      } else {
-        throw new Error(result.error || 'Text-to-speech conversion failed');
-      }
-    } catch (err) {
-      setIsSpeaking(false);
-      console.error('❌ Text-to-speech error:', err);
-      throw err;
-    }
-  };
 
   // TEXT-TO-SPEECH: Add text to queue and start processing
   const textToSpeech = useCallback((text: string) => {
@@ -572,18 +371,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   // SPEECH-TO-TEXT: Start recording
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const { mediaRecorder, chunks } = await startAudioRecording();
       mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.start();
+      chunksRef.current = chunks;
       setIsRecording(true);
       console.log('Recording started');
     } catch (error) {
@@ -593,43 +383,35 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   }, []);
 
   // SPEECH-TO-TEXT: Stop recording and transcribe
-  const stopRecording = useCallback((): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const mediaRecorder = mediaRecorderRef.current;
-      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-        reject(new Error('No active recording'));
-        return;
+  const stopRecording = useCallback(async (): Promise<string> => {
+    const mediaRecorder = mediaRecorderRef.current;
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      throw new Error('No active recording');
+    }
+
+    try {
+      setIsRecording(false);
+      setIsTranscribing(true);
+
+      // Use the service function to stop recording
+      const audioFile = await stopAudioRecording(mediaRecorder, chunksRef.current);
+
+      console.log('Recording stopped, transcribing...');
+
+      // Use the service function to transcribe
+      const result = await transcribeAudio(audioFile);
+      setIsTranscribing(false);
+
+      if (result.success && result.transcript) {
+        console.log('Transcription successful:', result.transcript);
+        return result.transcript;
+      } else {
+        throw new Error(result.error || 'Transcription failed');
       }
-
-      mediaRecorder.onstop = async () => {
-        setIsRecording(false);
-        setIsTranscribing(true);
-
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
-
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-
-        console.log('Recording stopped, transcribing...');
-
-        try {
-          const result = await transcribeAudio(audioFile);
-          setIsTranscribing(false);
-
-          if (result.success && result.transcript) {
-            console.log('Transcription successful:', result.transcript);
-            resolve(result.transcript);
-          } else {
-            reject(new Error(result.error || 'Transcription failed'));
-          }
-        } catch (error) {
-          setIsTranscribing(false);
-          reject(error);
-        }
-      };
-
-      mediaRecorder.stop();
-    });
+    } catch (error) {
+      setIsTranscribing(false);
+      throw error;
+    }
   }, []);
 
   const handleMicClick = async () => {
@@ -728,33 +510,20 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                   if (isFirstQuestionnaire) {
                     const secondQuestionnaire: Message = {
                       id: (Date.now() + Math.random() + 1).toString(),
-                      text: 'Now, pick two topics that are most meaningful to them:',
+                      text: ACTIVITY_SELECTION_MESSAGE,
                       isUser: false,
                       timestamp: new Date(),
                       type: 'questionnaire',
                       questionnaire: {
-                        initialMessage: 'Now, pick two topics that are most meaningful to them:',
-                        maxSelections: 2,
-                        questions: [
-                          { id: 'topic1', question: 'Food & cooking', selected: false },
-                          { id: 'topic2', question: 'Music & songs', selected: false },
-                          { id: 'topic3', question: 'Nature & outdoors', selected: false },
-                          { id: 'topic4', question: 'Travel & places', selected: false },
-                          { id: 'topic5', question: 'Sports & movement', selected: false },
-                          { id: 'topic6', question: 'Work & skills', selected: false },
-                          { id: 'topic7', question: 'Family & relationships', selected: false },
-                          { id: 'topic8', question: 'Celebrations & traditions', selected: false },
-                          { id: 'topic9', question: 'Spirituality / faith', selected: false },
-                          { id: 'topic10', question: 'Movies / TV / stories', selected: false },
-                          { id: 'topic11', question: 'Art / crafts / making things', selected: false },
-                          { id: 'topic12', question: 'Pets & animals', selected: false },
-                        ]
+                        initialMessage: ACTIVITY_SELECTION_MESSAGE,
+                        maxSelections: MAX_ACTIVITY_SELECTIONS,
+                        questions: ACTIVITY_TOPICS
                       }
                     };
                     updatedMessages.push(secondQuestionnaire);
 
                     // TEXT-TO-SPEECH: Play second questionnaire message
-                    setTimeout(() => textToSpeech(secondQuestionnaire.text || ''), 500);
+                    setTimeout(() => textToSpeech(ACTIVITY_SELECTION_MESSAGE), 500);
                   } else {
                     // This is the second questionnaire - transition directly to Phase 4
                     const selectedActivities = selectedQuestions.map(q => q.question);
