@@ -5,14 +5,9 @@ import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
 import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
 import {
-  questionToStatement,
-  activityToStatement,
-  generateProbingQuestions,
   SYMPTOM_QUESTIONS,
-  ACTIVITY_TOPICS,
   INITIAL_SYMPTOM_MESSAGE,
-  ACTIVITY_SELECTION_MESSAGE,
-  MAX_ACTIVITY_SELECTIONS
+  handleQuestionnaireCompletion
 } from '../services/chatservice';
 import {
   useAudioPlayer,
@@ -301,85 +296,33 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                   // Determine which questionnaire this is based on content
                   const isFirstQuestionnaire = message.questionnaire?.initialMessage.includes('symptoms') || false;
 
-                  // Convert questions to natural language statements
-                  const naturalLanguageResponses = selectedQuestions
-                    .map(q => {
-                      if (isFirstQuestionnaire) {
-                        return questionToStatement(q.question);
-                      } else {
-                        return activityToStatement(q.question);
-                      }
-                    })
-                    .join(' and ');
+                  // Use utility function to handle questionnaire completion
+                  const result = handleQuestionnaireCompletion(
+                    selectedQuestions,
+                    isFirstQuestionnaire,
+                    textToSpeech
+                  );
 
-                  const userResponse: Message = {
-                    id: (Date.now() + Math.random()).toString(),
-                    text: naturalLanguageResponses + '.',
-                    isUser: true,
-                    timestamp: new Date()
-                  };
+                  // Build updated messages array
+                  const updatedMessages = [...messages.slice(0, index + 1), result.userResponseMessage];
 
-                  const updatedMessages = [...messages.slice(0, index + 1), userResponse];
+                  // Add next questionnaire if provided
+                  if (result.nextQuestionnaire) {
+                    updatedMessages.push(result.nextQuestionnaire);
+                  }
 
-                  // Only add the next questionnaire if this is the first one
-                  if (isFirstQuestionnaire) {
-                    const secondQuestionnaire: Message = {
-                      id: (Date.now() + Math.random() + 1).toString(),
-                      text: ACTIVITY_SELECTION_MESSAGE,
-                      isUser: false,
-                      timestamp: new Date(),
-                      type: 'questionnaire',
-                      questionnaire: {
-                        initialMessage: ACTIVITY_SELECTION_MESSAGE,
-                        maxSelections: MAX_ACTIVITY_SELECTIONS,
-                        questions: ACTIVITY_TOPICS
-                      }
-                    };
-                    updatedMessages.push(secondQuestionnaire);
+                  // Handle Phase 4 transition
+                  if (result.shouldTransitionToPhase4 && result.selectedActivities) {
+                    initializeTopicConversations(result.selectedActivities);
 
-                    // TEXT-TO-SPEECH: Play second questionnaire message
-                    setTimeout(() => textToSpeech(ACTIVITY_SELECTION_MESSAGE), 500);
-                  } else {
-                    // This is the second questionnaire - transition directly to Phase 4
-                    const selectedActivities = selectedQuestions.map(q => q.question);
-
-                    // Initialize conversation flow with selected activities
-                    initializeTopicConversations(selectedActivities);
-
-                    if (selectedActivities.length > 0) {
-                      // Start Phase 4: Introduce first topic and ask fixed question
-                      const firstTopic = selectedActivities[0];
-                      const introMessage: Message = {
-                        id: (Date.now() + Math.random()).toString(),
-                        text: `Let's talk about ${firstTopic}.`,
-                        isUser: false,
-                        timestamp: new Date(),
-                        type: 'text'
-                      };
-
-                      const fixedQuestionMessage: Message = {
-                        id: (Date.now() + Math.random() + 1).toString(),
-                        text: generateProbingQuestions([firstTopic])[0].text || '',
-                        isUser: false,
-                        timestamp: new Date(),
-                        type: 'text'
-                      };
-
-                      updatedMessages.push(introMessage, fixedQuestionMessage);
-
-                      // Enable text input for Phase 4
-                      setHasActiveQuestionnaire(false);
-
-                      // TEXT-TO-SPEECH: Play both initial messages
-                      setTimeout(() => {
-                        textToSpeech(introMessage.text || '');
-                        setTimeout(() => textToSpeech(fixedQuestionMessage.text || ''), 2000);
-                      }, 500);
+                    if (result.phase4Messages) {
+                      updatedMessages.push(...result.phase4Messages);
                     }
+
+                    setHasActiveQuestionnaire(false);
                   }
 
                   setMessages(updatedMessages);
-                  // TODO: Send to backend here
                 }}
               />
             );
