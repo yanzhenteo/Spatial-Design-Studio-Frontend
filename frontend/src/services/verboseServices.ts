@@ -225,3 +225,104 @@ export async function textToSpeechComplete(text: string): Promise<HTMLAudioEleme
   // Play audio
   return await playAudio(audioBlob);
 }
+
+// ============================================================================
+// AUDIO QUEUE MANAGEMENT
+// ============================================================================
+
+/**
+ * Audio Queue Manager - Handles sequential playback of multiple TTS messages
+ */
+export class AudioQueueManager {
+  private queue: string[] = [];
+  private isProcessing: boolean = false;
+  private currentAudio: HTMLAudioElement | null = null;
+  private onSpeakingChange?: (isSpeaking: boolean) => void;
+
+  constructor(onSpeakingChange?: (isSpeaking: boolean) => void) {
+    this.onSpeakingChange = onSpeakingChange;
+  }
+
+  /**
+   * Adds text to the queue and starts processing if not already running
+   */
+  enqueue(text: string): void {
+    console.log('➕ Adding to TTS queue:', text);
+    this.queue.push(text);
+    console.log('Queue length now:', this.queue.length);
+    this.processQueue();
+  }
+
+  /**
+   * Processes the audio queue sequentially
+   */
+  private async processQueue(): Promise<void> {
+    if (this.isProcessing || this.queue.length === 0) {
+      return;
+    }
+
+    this.isProcessing = true;
+    console.log('🎵 Starting audio queue processing');
+    console.log('Queue length:', this.queue.length);
+
+    while (this.queue.length > 0) {
+      const text = this.queue.shift();
+      if (!text) continue;
+
+      console.log('\n=== PROCESSING QUEUE ITEM ===');
+      console.log('Remaining in queue:', this.queue.length);
+      console.log('Text to convert:', text);
+
+      try {
+        this.onSpeakingChange?.(true);
+
+        // Stop previous audio if any
+        if (this.currentAudio) {
+          console.log('Stopping previous audio');
+          this.currentAudio.pause();
+          this.currentAudio.src = '';
+          this.currentAudio = null;
+        }
+
+        // Play the text-to-speech
+        const audio = await textToSpeechComplete(text);
+        this.currentAudio = audio;
+
+        this.onSpeakingChange?.(false);
+      } catch (err) {
+        console.error('Error processing queue item:', err);
+        this.onSpeakingChange?.(false);
+      }
+    }
+
+    this.isProcessing = false;
+    console.log('✅ Queue processing complete\n');
+  }
+
+  /**
+   * Clears the queue and stops current playback
+   */
+  clear(): void {
+    this.queue = [];
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.src = '';
+      this.currentAudio = null;
+    }
+    this.onSpeakingChange?.(false);
+  }
+
+  /**
+   * Gets the current queue length
+   */
+  getQueueLength(): number {
+    return this.queue.length;
+  }
+
+  /**
+   * Checks if the queue is currently processing
+   */
+  isActive(): boolean {
+    return this.isProcessing;
+  }
+}

@@ -1,12 +1,9 @@
 // src/pages/ChatPage.tsx
 import { motion } from 'framer-motion';
-import { useState, useRef, useEffect ,useCallback} from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import ChatBubble from '../components/ChatBubble';
 import MessageInput from '../components/MessageInput';
 import ToggleQuestionnaire from '../components/ToggleQuestionnaire';
-import { generateAIQuestion } from '../utils/aiQuestionGenerator';
-import type { ConversationContext } from '../utils/aiQuestionGenerator';
-import type { QuestionItem } from '../components/ToggleQuestionnaire';
 import {
   questionToStatement,
   activityToStatement,
@@ -21,26 +18,15 @@ import {
   transcribeAudio,
   startRecording as startAudioRecording,
   stopRecording as stopAudioRecording,
-  textToSpeechComplete
+  AudioQueueManager
 } from '../services/verboseServices';
 import {
   saveConversation as saveConversationAPI,
-  prepareConversationData
+  prepareConversationData,
+  handleTopicConversationStep,
+  handleTopicTransition
 } from '../services/conversationService';
-
-
-interface Message {
-  id: string;
-  text?: string;
-  isUser: boolean;
-  timestamp: Date;
-  type?: 'text' | 'questionnaire';
-  questionnaire?: {
-    initialMessage: string;
-    questions: QuestionItem[];
-    maxSelections?: number;
-  };
-}
+import type { Message } from '../types/chat.types';
 
 interface ChatPageProps {
   onBack?: () => void;
@@ -85,11 +71,20 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioQueueRef = useRef<string[]>([]);
-  const isProcessingQueueRef = useRef<boolean>(false);
+
+  // Initialize AudioQueueManager
+  const audioQueueManager = useMemo(
+    () => new AudioQueueManager(setIsSpeaking),
+    []
+  );
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Helper function to use queue manager
+  const textToSpeech = (text: string) => {
+    audioQueueManager.enqueue(text);
   };
 
   useEffect(() => {
@@ -100,10 +95,11 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   useEffect(() => {
     // Play the first message after a short delay to ensure everything is loaded
     const timer = setTimeout(() => {
-      textToSpeech(INITIAL_SYMPTOM_MESSAGE);
+      audioQueueManager.enqueue(INITIAL_SYMPTOM_MESSAGE);
     }, 1000);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array = run once on mount
 
   const saveConversation = async () => {
@@ -161,145 +157,70 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         const currentTopic = selectedTopics[currentTopicIndex];
         const conversation = topicConversations[currentTopic];
 
-        // Step 1: User answered the fixed question - show first AI-generated question
-        if (!conversation.fixedAnswer) {
-          setTopicConversations(prev => ({
-            ...prev,
-            [currentTopic]: { ...prev[currentTopic], fixedAnswer: messageText }
-          }));
+        // Handle conversation step (generates questions if needed)
+        const stepResult = await handleTopicConversationStep(
+          messageText,
+          currentTopic,
+          conversation,
+          topicConversations
+        );
 
-          // Generate first AI question
-          const context: ConversationContext = {
-            initialQuestion: conversation.fixedQuestion,
-            initialAnswer: messageText
-          };
-
-          const firstAIQuestion = await generateAIQuestion(currentTopic, context, false);
-
-          const aiQuestionMessage: Message = {
-            id: (Date.now() + Math.random()).toString(),
-            text: firstAIQuestion,
-            isUser: false,
-            timestamp: new Date(),
-            type: 'text'
-          };
-
-          setMessages(prev => [...prev, aiQuestionMessage]);
-
-          // TEXT-TO-SPEECH: Play the AI question
-          textToSpeech(firstAIQuestion);
-          setTopicConversations(prev => ({
-            ...prev,
-            [currentTopic]: { ...prev[currentTopic], firstAIQuestion }
-          }));
-
-          setIsLoading(false);
-          return;
+        // Update state with new conversation data
+        if (stepResult.updatedTopicConversations) {
+          setTopicConversations(stepResult.updatedTopicConversations);
         }
 
-        // Step 2: User answered first AI question - show second AI-generated question
-        if (!conversation.firstAIAnswer) {
-          setTopicConversations(prev => ({
-            ...prev,
-            [currentTopic]: { ...prev[currentTopic], firstAIAnswer: messageText }
-          }));
+        // Add AI messages to chat
+        setMessages(prev => [...prev, ...stepResult.messages]);
 
-          // Generate second AI question with full context
-          const context: ConversationContext = {
-            initialQuestion: conversation.fixedQuestion,
-            initialAnswer: conversation.fixedAnswer,
-            firstFollowUpQuestion: conversation.firstAIQuestion,
-            firstFollowUpAnswer: messageText
-          };
+        // Play AI messages via text-to-speech
+        stepResult.messages.forEach(msg => {
+          if (msg.text) {
+            textToSpeech(msg.text);
+          }
+        });
 
-          const secondAIQuestion = await generateAIQuestion(currentTopic, context, true);
+        // Check if conversation step is complete (no more questions to ask)
+        const updatedConversation = stepResult.updatedTopicConversations?.[currentTopic];
+        if (updatedConversation?.secondAIAnswer) {
+          // Handle transition to next topic or completion
+          const transitionResult = handleTopicTransition(
+            currentTopicIndex,
+            selectedTopics,
+            stepResult.updatedTopicConversations!
+          );
 
-          const aiQuestionMessage: Message = {
-            id: (Date.now() + Math.random()).toString(),
-            text: secondAIQuestion,
-            isUser: false,
-            timestamp: new Date(),
-            type: 'text'
-          };
-
-          setMessages(prev => [...prev, aiQuestionMessage]);
-
-          // TEXT-TO-SPEECH: Play the AI question
-          textToSpeech(secondAIQuestion);
-          setTopicConversations(prev => ({
-            ...prev,
-            [currentTopic]: { ...prev[currentTopic], secondAIQuestion }
-          }));
-
-          setIsLoading(false);
-          return;
-        }
-
-        // Step 3: User answered second AI question - move to next topic or complete
-        if (!conversation.secondAIAnswer) {
-          setTopicConversations(prev => ({
-            ...prev,
-            [currentTopic]: { ...prev[currentTopic], secondAIAnswer: messageText }
-          }));
-
-          // Check if there are more topics
-          if (currentTopicIndex + 1 < selectedTopics.length) {
-            // Move to next topic
-            const nextTopicIndex = currentTopicIndex + 1;
-            const nextTopic = selectedTopics[nextTopicIndex];
-
-            setCurrentTopicIndex(nextTopicIndex);
-
-            // Initialize conversation for next topic
-            setTopicConversations(prev => ({
-              ...prev,
-              [nextTopic]: {
-                fixedQuestion: generateProbingQuestions([nextTopic])[0].text || ''
-              }
-            }));
-
-            // Introduce next topic
-            const introMessage: Message = {
-              id: (Date.now() + Math.random()).toString(),
-              text: `Let's talk about ${nextTopic}.`,
-              isUser: false,
-              timestamp: new Date(),
-              type: 'text'
-            };
-
-            const nextFixedQuestion: Message = {
-              id: (Date.now() + Math.random() + 1).toString(),
-              text: generateProbingQuestions([nextTopic])[0].text || '',
-              isUser: false,
-              timestamp: new Date(),
-              type: 'text'
-            };
-
-            setMessages(prev => [...prev, introMessage, nextFixedQuestion]);
-
-            // TEXT-TO-SPEECH: Play both messages
-            textToSpeech(introMessage.text || '');
-            // Wait a bit before playing the second message
-            setTimeout(() => textToSpeech(nextFixedQuestion.text || ''), 2000);
-          } else {
-            // All topics complete - disable chat
-            setPhase4Complete(true);
-            const completionMessage: Message = {
-              id: (Date.now() + Math.random()).toString(),
-              text: 'Thank you for sharing these wonderful memories! We have all the information we need.',
-              isUser: false,
-              timestamp: new Date(),
-              type: 'text'
-            };
-            setMessages(prev => [...prev, completionMessage]);
-
-            // TEXT-TO-SPEECH: Play completion message
-            textToSpeech(completionMessage.text || '');
+          // Update state based on transition
+          if (transitionResult.updatedTopicConversations) {
+            setTopicConversations(transitionResult.updatedTopicConversations);
           }
 
-          setIsLoading(false);
-          return;
+          if (transitionResult.nextTopicIndex !== undefined) {
+            setCurrentTopicIndex(transitionResult.nextTopicIndex);
+          }
+
+          if (transitionResult.phase4Complete) {
+            setPhase4Complete(true);
+          }
+
+          // Add transition messages
+          setMessages(prev => [...prev, ...transitionResult.messages]);
+
+          // Play transition messages
+          transitionResult.messages.forEach((msg, index) => {
+            if (msg.text) {
+              if (index === 0) {
+                textToSpeech(msg.text);
+              } else {
+                // Delay second message slightly
+                setTimeout(() => textToSpeech(msg.text!), 2000);
+              }
+            }
+          });
         }
+
+        setIsLoading(false);
+        return;
       }
 
       setIsLoading(false);
@@ -316,60 +237,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     }
   };
 
-  // TEXT-TO-SPEECH: Process queue and play audio sequentially
-  const processAudioQueue = useCallback(async () => {
-    if (isProcessingQueueRef.current || audioQueueRef.current.length === 0) {
-      return;
-    }
-
-    isProcessingQueueRef.current = true;
-    console.log('🎵 Starting audio queue processing');
-    console.log('Queue length:', audioQueueRef.current.length);
-
-    while (audioQueueRef.current.length > 0) {
-      const text = audioQueueRef.current.shift();
-      if (!text) continue;
-
-      console.log('\n=== PROCESSING QUEUE ITEM ===');
-      console.log('Remaining in queue:', audioQueueRef.current.length);
-      console.log('Text to convert:', text);
-
-      try {
-        setIsSpeaking(true);
-
-        // Stop previous audio if any
-        if (audioRef.current) {
-          console.log('Stopping previous audio');
-          audioRef.current.pause();
-          audioRef.current.src = '';
-          audioRef.current = null;
-        }
-
-        // Use the service function
-        const audio = await textToSpeechComplete(text);
-        audioRef.current = audio;
-
-        setIsSpeaking(false);
-      } catch (err) {
-        console.error('Error processing queue item:', err);
-        setIsSpeaking(false);
-      }
-    }
-
-    isProcessingQueueRef.current = false;
-    console.log('✅ Queue processing complete\n');
-  }, []); // All dependencies are refs or functions that don't change
-
-  // TEXT-TO-SPEECH: Add text to queue and start processing
-  const textToSpeech = useCallback((text: string) => {
-    console.log('➕ Adding to TTS queue:', text);
-    audioQueueRef.current.push(text);
-    console.log('Queue length now:', audioQueueRef.current.length);
-    processAudioQueue();
-  }, [processAudioQueue]);
-
   // SPEECH-TO-TEXT: Start recording
-  const startRecording = useCallback(async () => {
+  const startRecording = async () => {
     try {
       const { mediaRecorder, chunks } = await startAudioRecording();
       mediaRecorderRef.current = mediaRecorder;
@@ -380,10 +249,10 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       console.error('Error starting recording:', error);
       alert('Unable to access microphone. Please check permissions.');
     }
-  }, []);
+  };
 
   // SPEECH-TO-TEXT: Stop recording and transcribe
-  const stopRecording = useCallback(async (): Promise<string> => {
+  const stopRecording = async (): Promise<string> => {
     const mediaRecorder = mediaRecorderRef.current;
     if (!mediaRecorder || mediaRecorder.state === 'inactive') {
       throw new Error('No active recording');
@@ -412,7 +281,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       setIsTranscribing(false);
       throw error;
     }
-  }, []);
+  };
 
   const handleMicClick = async () => {
     if (isRecording) {
