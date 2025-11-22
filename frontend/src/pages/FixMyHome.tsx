@@ -1,71 +1,151 @@
-// src/pages/FixMyHome.tsx
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import HeaderCard from '../components/HeaderCard';
 import ContentCard from '../components/ContentCard';
-import Button from '../components/Button';
-import DoubleButton from '../components/DoubleButton';
+import StepIndicator, { type FeatureStep } from '../components/StepIndicator';
+import BackButton from '../components/BackButton';
+import CameraStep from '../components/CameraStep';
+import ResultsStep from '../components/ResultsStep';
+import ProductRecommendationsStep from '../components/ProductRecommendationsStep';
+import IssueSelectionStep from '../components/IssueSelectionStep';
+import CommentsStep from '../components/CommentsStep';
+import StepNavigation from '../components/StepNavigation';
+import type { AnalysisResults } from '../utils/cameraUtils';
 
 interface FixMyHomeProps {
   onBack: () => void;
 }
 
-type FeatureStep = 'welcome' | 'step1' | 'step2' | 'step3' | 'complete';
-
 function FixMyHome({ onBack }: FixMyHomeProps) {
-  const [currentStep, setCurrentStep] = useState<FeatureStep>('welcome');
+  const [currentStep, setCurrentStep] = useState<FeatureStep>('step1');
+  const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
+  const [comments, setComments] = useState('');
+  const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [hasImageSelected, setHasImageSelected] = useState(false);
 
-  const handleStart = () => {
-    setCurrentStep('step1');
-  };
+  // Use ref instead of state to avoid triggering re-renders
+  const imageUploadFnRef = useRef<(() => Promise<void>) | null>(null);
 
-  const handleNext = () => {
-    const steps: FeatureStep[] = ['welcome', 'step1', 'step2', 'step3', 'complete'];
+  // Handle analysis completion from camera/gallery upload
+  const handleAnalysisComplete = useCallback((results: AnalysisResults) => {
+    console.log('Analysis complete, moving to step 4');
+    console.log('Results:', results);
+    console.log('Setting isProcessingImage to false');
+    console.log('Setting currentStep to step4');
+    setAnalysisResults(results);
+    setIsProcessingImage(false);
+    setCurrentStep('step4');
+  }, []);
+
+  // Handle image ready callback from CameraStep
+  const handleImageReady = useCallback((uploadFn: (() => Promise<void>) | null) => {
+    imageUploadFnRef.current = uploadFn;
+    // Update state to track if we have an image (for button disable logic)
+    setHasImageSelected(uploadFn !== null);
+  }, []);
+
+  // Define handleNext first using useCallback to avoid recreation
+  const handleNext = useCallback(async () => {
+    const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4', 'recommendations'];
     const currentIndex = steps.indexOf(currentStep);
-    if (currentIndex < steps.length - 1) {
+
+    // If we're on step3 and have an image ready, trigger upload
+    if (currentStep === 'step3' && imageUploadFnRef.current) {
+      console.log('Starting image upload...');
+      setIsProcessingImage(true);
+      try {
+        await imageUploadFnRef.current();
+        console.log('Upload completed successfully');
+        // Don't move to next step here - handleAnalysisComplete will do it
+      } catch (error) {
+        console.error('Failed to upload image:', error);
+        setIsProcessingImage(false);
+      }
+    } else if (currentIndex < steps.length - 1) {
       setCurrentStep(steps[currentIndex + 1]);
     }
+  }, [currentStep]);
+
+  const handleStart = () => {
+    setCurrentStep('step2');
   };
 
   const handleBack = () => {
-    const steps: FeatureStep[] = ['welcome', 'step1', 'step2', 'step3', 'complete'];
+    const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4', 'recommendations'];
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex > 0) {
       setCurrentStep(steps[currentIndex - 1]);
     }
   };
 
+  const toggleIssue = (issue: string) => {
+    setSelectedIssues(prev => 
+      prev.includes(issue) 
+        ? prev.filter(item => item !== issue)
+        : [...prev, issue]
+    );
+  };
+
+  // Format selected issues for display
+  const formatSelectedIssues = () => {
+    if (selectedIssues.length === 0) return '';
+    if (selectedIssues.length === 1) return selectedIssues[0];
+    
+    // Capitalize first letter of each word
+    const capitalizedIssues = selectedIssues.map(issue => 
+      issue.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ')
+    );
+    
+    if (capitalizedIssues.length === 2) {
+      return `${capitalizedIssues[0]} and ${capitalizedIssues[1]}`;
+    }
+    
+    return capitalizedIssues.slice(0, -1).join(', ') + ' and ' + capitalizedIssues.slice(-1);
+  };
+
+  // Symptom descriptions for each issue
+  const getSymptomDescriptions = () => {
+    const descriptions: Record<string, string> = {
+      'Way-finding': 'Difficulty navigating familiar spaces and getting lost in the home.',
+      'Glare sensitivity': 'Eyes are easily bothered by bright lights and reflections.',
+      'Misplacing items': 'Frequently losing track of everyday objects like keys and glasses.',
+      'Forgetfulness': 'Trouble remembering recent events and daily routines.',
+      'Lack spatial perception': 'Misjudging distances and having trouble with depth perception.'
+    };
+
+    return selectedIssues.map(issue => descriptions[issue] || '').filter(desc => desc !== '');
+  };
+
+  // Handle end button click - go back to homepage
+  const handleEnd = () => {
+    onBack();
+  };
+
   // Step configurations
   const stepConfigs = {
-    welcome: {
+    step1: {
       header: "What would you like to fix?",
       content: "You may pick one or more options:",
-      buttonText: "Start Assessment",
-      onButtonClick: handleStart
-    },
-    step1: {
-      header: "Step 1: Safety Check",
-      content: "First, let's check for any immediate safety concerns. Are there any tripping hazards, loose handrails, or electrical issues you've noticed?",
-      buttonText: "Next",
-      onButtonClick: handleNext
     },
     step2: {
-      header: "Step 2: Comfort Assessment",
-      content: "Now let's look at comfort. Are there areas that are too hot, cold, noisy, or difficult to access? Think about lighting, temperature, and ease of movement.",
-      buttonText: "Next", 
-      onButtonClick: handleNext
+      header: formatSelectedIssues() || "Symptom Overview",
+      content: "Any further comments or elaboration you would like to add?",
+      symptomDescriptions: getSymptomDescriptions().join(' '),
     },
     step3: {
-      header: "Step 3: Organization",
-      content: "Let's talk about organization. Are there items you frequently use that are hard to reach? Or clutter that makes spaces difficult to navigate?",
-      buttonText: "Complete Assessment",
-      onButtonClick: handleNext
+      header: formatSelectedIssues() || "Comfort Assessment",
+      content: "Let's take a photo of the area you'd like to improve. This will help us provide better recommendations.",
     },
-    complete: {
-      header: "Assessment Complete!",
-      content: "Great job! Based on your input, I've identified several areas for improvement. Would you like to see your personalized home improvement plan?",
-      buttonText: "View Plan",
-      onButtonClick: () => console.log("Show improvement plan")
+    step4: {
+      header: "Results",
+      content: "Based on your assessment, here are our recommendations:",
+    },
+    recommendations: {
+      header: "Let's make changes!",
+      content: "Here are some recommended products to help implement the improvements:",
     }
   };
 
@@ -78,23 +158,13 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6, ease: "easeInOut" }}
-      className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center justify-center p-6"
+      className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center p-6"
     >
-      {/* Back Button */}
-      <div className="w-full max-w-md absolute top-30 left-6">
-        <button
-          onClick={onBack}
-          className="text-muted-purple text-button-text flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Home
-        </button>
-      </div>
+      {/* Back Button Component */}
+      <BackButton onBack={onBack} />
 
-      {/* Animated Card Container */}
-      <div className="w-full max-w-md">
+      {/* Animated Card Container - Centered content */}
+      <div className="w-full max-w-md flex-1 flex flex-col justify-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
@@ -105,54 +175,94 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
           >
             {/* Header Card */}
             <HeaderCard className="mb-6">
-              <h1 className="text-header text-dark-grey">{currentConfig.header}</h1>
+              <h1 className="text-header text-dark-grey mb-2">{currentConfig.header}</h1>
+              {/* Symptom descriptions - only show on step2 */}
+              {currentStep === 'step2' && (
+                <p className="text-big-text text-dark-grey opacity-80">
+                  {(currentConfig as any).symptomDescriptions}
+                </p>
+              )}
             </HeaderCard>
 
             {/* Content Card */}
             <ContentCard>
-              <p className="text-big-text text-dark-grey text-center mb-6">
-                {currentConfig.content}
-              </p>
+              {/* Content text - show for all steps */}
+              {currentConfig.content && (
+                <p className="text-big-text text-dark-grey text-center mb-6">
+                  {currentConfig.content}
+                </p>
+              )}
 
-              {/* Step Indicator */}
-              {currentStep !== 'welcome' && currentStep !== 'complete' && (
-                <div className="flex justify-center space-x-2 mb-6">
-                  {[1, 2, 3].map((step) => (
-                    <div
-                      key={step}
-                      className={`w-3 h-3 rounded-full ${
-                        step <= (['step1', 'step2', 'step3'].indexOf(currentStep) + 1)
-                          ? 'bg-muted-purple'
-                          : 'bg-gray-300'
-                      }`}
-                    />
-                  ))}
+              {/* Comments input - only show on step2 */}
+              {currentStep === 'step2' && (
+                <CommentsStep
+                  comments={comments}
+                  onCommentsChange={setComments}
+                />
+              )}
+
+              {/* Camera interface - only show on step3 */}
+              {currentStep === 'step3' && !isProcessingImage && (
+                <CameraStep
+                  selectedIssues={selectedIssues}
+                  comments={comments}
+                  onAnalysisComplete={handleAnalysisComplete}
+                  onImageReady={handleImageReady}
+                />
+              )}
+
+              {/* Loading screen - show between step3 and step4 */}
+              {currentStep === 'step3' && isProcessingImage && (
+                <div className="w-full mb-6 space-y-4">
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center min-h-[300px]">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red mb-4"></div>
+                    <p className="text-big-text text-dark-grey text-center">
+                      Processing your image...
+                    </p>
+                    <p className="text-sm text-gray-600 text-center mt-2">
+                      This may take several minutes
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* Buttons */}
-              {currentStep === 'welcome' || currentStep === 'complete' ? (
-                // Single button for welcome and complete steps
-                <Button 
-                  variant={currentStep === 'complete' ? 'primary' : 'danger'} 
-                  onClick={currentConfig.onButtonClick}
-                >
-                  {currentConfig.buttonText}
-                </Button>
-              ) : (
-                // Double buttons for intermediate steps
-                <DoubleButton
-                  variant="primary"
-                  leftButton={{
-                    onClick: handleBack,
-                    children: "Back"
-                  }}
-                  rightButton={{
-                    onClick: currentConfig.onButtonClick,
-                    children: currentConfig.buttonText
-                  }}
+              {/* Results content - only show on step4 */}
+              {currentStep === 'step4' && (
+                <ResultsStep analysisResults={analysisResults} />
+              )}
+
+              {/* Product recommendations - only show on recommendations step */}
+              {currentStep === 'recommendations' && (
+                <ProductRecommendationsStep currentStep={currentStep}
                 />
               )}
+
+              {/* Issue Selection - Only show on step1 */}
+              {currentStep === 'step1' && (
+                <IssueSelectionStep
+                  selectedIssues={selectedIssues}
+                  onToggleIssue={toggleIssue}
+                />
+              )}
+
+              {/* Step Indicator - Show on all steps except recommendations (now handled inside ProductRecommendationsStep) */}
+              {currentStep !== 'recommendations' && currentStep !== 'step4' && (
+                <StepIndicator 
+                  currentStep={currentStep} 
+                  className="mb-6" 
+                />
+              )}
+
+              {/* Step Navigation */}
+              <StepNavigation
+                currentStep={currentStep}
+                onBack={handleBack}
+                onNext={handleNext}
+                onConfirm={handleStart}
+                onEnd={handleEnd}
+                isStep1Disabled={selectedIssues.length === 0}
+                isStep3Disabled={!hasImageSelected || isProcessingImage}
+              />
             </ContentCard>
           </motion.div>
         </AnimatePresence>
