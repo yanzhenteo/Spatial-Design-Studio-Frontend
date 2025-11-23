@@ -18,7 +18,28 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true, // This is recommended to avoid CORS issues
       },
-      // Proxy for the speech-to-text microservice
+      // Proxy for speech services (routes to port 8003 - verbose service)
+      '/microservice/speech-to-text': {
+        target: 'http://127.0.0.1:8003',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/microservice/, ''),
+      },
+      '/microservice/text-to-speech': {
+        target: 'http://127.0.0.1:8003',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/microservice/, ''),
+      },
+      '/microservice/download-audio': {
+        target: 'http://127.0.0.1:8003',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/microservice/, ''),
+      },
+      '/microservice/download-transcript': {
+        target: 'http://127.0.0.1:8003',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/microservice/, ''),
+      },
+      // Proxy for image transform (routes to port 8002 - image service)
       '/microservice': {
         target: 'http://127.0.0.1:8002',
         changeOrigin: true,

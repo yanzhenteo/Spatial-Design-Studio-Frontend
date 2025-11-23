@@ -1,254 +1,184 @@
 // src/services/verboseServices.ts
-import { useState, useRef, useCallback } from 'react';
+/**
+ * Voice Services - Simple WebSocket Implementation
+ *
+ * WebSocket-based voice services with separate STT and TTS methods.
+ * - Speech-to-Text: User speaks → Server transcribes → Returns text
+ * - Text-to-Speech: Chatbot text → Server generates audio → Streams back
+ *
+ * Protocol:
+ * - STT: Send {type: 'stt', audio: 'base64...'} → Get {type: 'transcript', text: '...'}
+ * - TTS: Send {type: 'tts', text: '...'} → Get audio_chunk messages + audio_end
+ */
 
-const IMAGE_GEN_SERVICE_URL = '/microservice';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
-// ============================================================================
-// SPEECH-TO-TEXT SERVICES
-// ============================================================================
+// WebSocket URL for verbose service
+const WEBSOCKET_URL = 'ws://127.0.0.1:8003/ws';
 
-export interface TranscriptionResult {
-  success: boolean;
-  transcript?: string;
-  error?: string;
+// Message type definitions
+interface WebSocketMessage {
+  type: string;
+  text?: string;
+  data?: string;
+  message?: string;
+  [key: string]: unknown;
 }
 
-/**
- * Transcribes audio file to text using the microservice API
- * @param audioFile - The audio file to transcribe
- * @returns Transcription result with success status and transcript or error
- */
-export async function transcribeAudio(audioFile: File): Promise<TranscriptionResult> {
-  const formData = new FormData();
-  formData.append('file', audioFile);
+type MessageHandler = (data: WebSocketMessage) => void;
 
-  try {
-    const response = await fetch(`${IMAGE_GEN_SERVICE_URL}/speech-to-text`, {
-      method: 'POST',
-      body: formData,
-    });
+// ============================================================================
+// WebSocket Connection Manager
+// ============================================================================
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+class VoiceWebSocket {
+  private ws: WebSocket | null = null;
+  private messageHandlers: Map<string, MessageHandler> = new Map();
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private isConnecting: boolean = false;
+
+  async connect(): Promise<void> {
+    if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
+      return; // Already connected or connecting
     }
 
-    const result = await response.json();
+    return new Promise((resolve, reject) => {
+      this.isConnecting = true;
+      console.log('[WebSocket] Connecting to:', WEBSOCKET_URL);
 
-    if (result.success) {
-      return {
-        success: true,
-        transcript: result.transcript
+      this.ws = new WebSocket(WEBSOCKET_URL);
+
+      this.ws.onopen = () => {
+        console.log('[WebSocket] Connected');
+        this.isConnecting = false;
+        resolve();
       };
-    } else {
-      throw new Error(result.error || 'Transcription failed');
-    }
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Failed to connect to service'
-    };
-  }
-}
 
-/**
- * Starts recording audio from the user's microphone
- * @returns MediaRecorder instance and chunks array for managing the recording
- */
-export async function startRecording(): Promise<{
-  mediaRecorder: MediaRecorder;
-  chunks: Blob[];
-}> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const mediaRecorder = new MediaRecorder(stream);
-  const chunks: Blob[] = [];
-
-  mediaRecorder.ondataavailable = (event) => {
-    if (event.data.size > 0) {
-      chunks.push(event.data);
-    }
-  };
-
-  mediaRecorder.start();
-  return { mediaRecorder, chunks };
-}
-
-/**
- * Stops recording and returns the audio blob
- * @param mediaRecorder - The MediaRecorder instance to stop
- * @param chunks - Array of audio chunks
- * @returns Promise that resolves to the audio File
- */
-export function stopRecording(
-  mediaRecorder: MediaRecorder,
-  chunks: Blob[]
-): Promise<File> {
-  return new Promise((resolve, reject) => {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      reject(new Error('No active recording'));
-      return;
-    }
-
-    mediaRecorder.onstop = () => {
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
-      const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-      const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-      resolve(audioFile);
-    };
-
-    mediaRecorder.stop();
-  });
-}
-
-// ============================================================================
-// TEXT-TO-SPEECH SERVICES
-// ============================================================================
-
-export interface TextToSpeechResult {
-  success: boolean;
-  audioFilePath?: string;
-  error?: string;
-}
-
-/**
- * Converts text to speech and returns the audio file path
- * @param text - The text to convert to speech
- * @returns Result with audio file path or error
- */
-export async function convertTextToSpeech(text: string): Promise<TextToSpeechResult> {
-  try {
-    const response = await fetch(`${IMAGE_GEN_SERVICE_URL}/text-to-speech`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-
-    if (result.success && result.audio_file_path) {
-      return {
-        success: true,
-        audioFilePath: result.audio_file_path
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          const handler = this.messageHandlers.get(message.type);
+          if (handler) {
+            handler(message);
+          }
+        } catch (error) {
+          console.error('[WebSocket] Error parsing message:', error);
+        }
       };
-    } else {
-      throw new Error(result.error || 'Text-to-speech conversion failed');
-    }
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Failed to connect to service'
-    };
-  }
-}
 
-/**
- * Downloads audio file from the microservice
- * @param filename - The filename to download
- * @returns Audio blob
- */
-export async function downloadAudioFile(filename: string): Promise<Blob> {
-  const audioResponse = await fetch(`${IMAGE_GEN_SERVICE_URL}/download-audio/${filename}`);
+      this.ws.onerror = (error) => {
+        console.error('[WebSocket] Error:', error);
+        this.isConnecting = false;
+        reject(error);
+      };
 
-  if (!audioResponse.ok) {
-    throw new Error('Failed to download audio');
-  }
-
-  return await audioResponse.blob();
-}
-
-/**
- * Plays audio blob and returns a promise that resolves when playback completes
- * @param audioBlob - The audio blob to play
- * @returns Promise that resolves when audio finishes playing
- */
-export function playAudio(audioBlob: Blob): Promise<HTMLAudioElement> {
-  return new Promise((resolve, reject) => {
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-    let hasEnded = false;
-
-    audio.onended = () => {
-      if (hasEnded) return;
-      hasEnded = true;
-      setTimeout(() => {
-        URL.revokeObjectURL(audioUrl);
-      }, 100);
-      resolve(audio);
-    };
-
-    audio.onerror = () => {
-      if (hasEnded) return;
-      hasEnded = true;
-      setTimeout(() => {
-        URL.revokeObjectURL(audioUrl);
-      }, 100);
-      reject(new Error('Audio playback error'));
-    };
-
-    audio.play().catch((err) => {
-      if (hasEnded) return;
-      hasEnded = true;
-      setTimeout(() => {
-        URL.revokeObjectURL(audioUrl);
-      }, 100);
-      reject(err);
+      this.ws.onclose = () => {
+        console.log('[WebSocket] Closed');
+        this.isConnecting = false;
+        this.ws = null;
+        // Auto-reconnect after 2 seconds
+        this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+      };
     });
-  });
-}
-
-/**
- * Complete text-to-speech pipeline: converts text to speech, downloads, and plays audio
- * @param text - The text to convert and play
- * @returns Promise that resolves with the audio element when playback completes
- */
-export async function textToSpeechComplete(text: string): Promise<HTMLAudioElement> {
-  // Convert text to speech
-  const conversionResult = await convertTextToSpeech(text);
-
-  if (!conversionResult.success || !conversionResult.audioFilePath) {
-    throw new Error(conversionResult.error || 'Text-to-speech conversion failed');
   }
 
-  // Extract filename from path
-  const filename = conversionResult.audioFilePath.split(/[/\\]/).pop();
-  if (!filename) {
-    throw new Error('Invalid audio file path');
+  disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
   }
 
-  // Download audio file
-  const audioBlob = await downloadAudioFile(filename);
+  send(data: WebSocketMessage): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    } else {
+      console.error('[WebSocket] Cannot send - not connected');
+    }
+  }
 
-  // Play audio
-  return await playAudio(audioBlob);
+  on(messageType: string, handler: MessageHandler): void {
+    this.messageHandlers.set(messageType, handler);
+  }
+
+  off(messageType: string): void {
+    this.messageHandlers.delete(messageType);
+  }
 }
 
+// Shared WebSocket instance
+const voiceWS = new VoiceWebSocket();
+
 // ============================================================================
-// CUSTOM HOOKS
+// React Hook: useVoiceRecording (Speech-to-Text)
 // ============================================================================
 
-/**
- * Custom hook for managing voice recording and transcription
- */
 export function useVoiceRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const transcriptResolveRef = useRef<((text: string) => void) | null>(null);
 
-  const startRecordingHook = useCallback(async () => {
+  // Initialize WebSocket connection
+  useEffect(() => {
+    voiceWS.connect().catch(err => {
+      console.error('[STT] Failed to connect:', err);
+    });
+
+    // Handle transcript messages
+    voiceWS.on('transcript', (message) => {
+      console.log('[STT] Received transcript:', message.text);
+      if (transcriptResolveRef.current && message.text) {
+        transcriptResolveRef.current(message.text);
+        transcriptResolveRef.current = null;
+      }
+      setIsTranscribing(false);
+    });
+
+    // Handle errors
+    voiceWS.on('error', (message) => {
+      console.error('[STT] Error:', message.message);
+      setIsTranscribing(false);
+    });
+
+    return () => {
+      voiceWS.off('transcript');
+      voiceWS.off('error');
+    };
+  }, []);
+
+  const startRecording = useCallback(async () => {
     try {
-      const { mediaRecorder, chunks } = await startRecording();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
       mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = chunks;
       setIsRecording(true);
-      console.log('Recording started');
+      console.log('[STT] Recording started');
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('[STT] Error starting recording:', error);
       throw error;
     }
   }, []);
@@ -259,160 +189,241 @@ export function useVoiceRecording() {
       throw new Error('No active recording');
     }
 
-    try {
-      setIsRecording(false);
-      setIsTranscribing(true);
+    return new Promise<string>((resolve, reject) => {
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
 
-      const audioFile = await stopRecording(mediaRecorder, chunksRef.current);
-      console.log('Recording stopped, transcribing...');
+        setIsRecording(false);
+        setIsTranscribing(true);
 
-      const result = await transcribeAudio(audioFile);
-      setIsTranscribing(false);
+        try {
+          // Combine audio chunks into blob
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: 'audio/webm;codecs=opus'
+          });
 
-      if (result.success && result.transcript) {
-        console.log('Transcription successful:', result.transcript);
-        return result.transcript;
-      } else {
-        throw new Error(result.error || 'Transcription failed');
-      }
-    } catch (error) {
-      setIsTranscribing(false);
-      throw error;
-    }
+          console.log('[STT] Audio recorded:', audioBlob.size, 'bytes');
+
+          // Convert blob to base64
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = (reader.result as string).split(',')[1]; // Remove data:audio/webm;base64, prefix
+
+            // Store resolve function for when transcript arrives
+            transcriptResolveRef.current = resolve;
+
+            // Send STT request via WebSocket
+            voiceWS.send({
+              type: 'stt',
+              audio: base64Audio
+            });
+
+            console.log('[STT] Sent audio for transcription');
+          };
+
+          reader.onerror = () => {
+            setIsTranscribing(false);
+            reject(new Error('Failed to read audio blob'));
+          };
+
+          reader.readAsDataURL(audioBlob);
+
+          // Timeout after 30 seconds
+          setTimeout(() => {
+            if (transcriptResolveRef.current) {
+              transcriptResolveRef.current = null;
+              setIsTranscribing(false);
+              reject(new Error('Transcription timeout'));
+            }
+          }, 30000);
+
+        } catch (error) {
+          setIsTranscribing(false);
+          reject(error);
+        }
+      };
+
+      mediaRecorder.stop();
+    });
   }, []);
 
   return {
     isRecording,
     isTranscribing,
-    startRecording: startRecordingHook,
+    startRecording,
     stopRecordingAndTranscribe
   };
 }
 
-/**
- * Custom hook for managing audio queue and text-to-speech playback
- */
+// ============================================================================
+// React Hook: useAudioPlayer (Text-to-Speech)
+// ============================================================================
+
 export function useAudioPlayer() {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  // const audioContextRef = useRef<AudioContext | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const isProcessingRef = useRef(false);
+  const audioChunksRef = useRef<string[]>([]);
 
-  const audioQueueManager = useRef<AudioQueueManager>(
-    new AudioQueueManager(setIsSpeaking)
-  ).current;
+  // Define processQueue before useEffect so it can be used in the dependency array
+  const processQueue = useCallback(() => {
+    if (isProcessingRef.current || queueRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingRef.current = true;
+    const text = queueRef.current.shift();
+
+    if (text) {
+      console.log('[TTS] Speaking:', text);
+      audioChunksRef.current = [];
+      setIsSpeaking(true);
+
+      // Send TTS request via WebSocket
+      voiceWS.send({
+        type: 'tts',
+        text: text
+      });
+    } else {
+      isProcessingRef.current = false;
+    }
+  }, []);
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    voiceWS.connect().catch(err => {
+      console.error('[TTS] Failed to connect:', err);
+    });
+
+    // Handle audio chunk messages
+    voiceWS.on('audio_chunk', (message) => {
+      if (message.data) {
+        audioChunksRef.current.push(message.data);
+      }
+    });
+
+    // Handle audio end message
+    voiceWS.on('audio_end', async () => {
+      console.log('[TTS] Received all audio chunks:', audioChunksRef.current.length);
+
+      try {
+        // Combine all chunks and play
+        await playAudioChunks(audioChunksRef.current);
+        audioChunksRef.current = [];
+        setIsSpeaking(false);
+        isProcessingRef.current = false;
+
+        // Process next item in queue
+        setTimeout(() => {
+          processQueue();
+        }, 100);
+      } catch (error) {
+        console.error('[TTS] Error playing audio:', error);
+        audioChunksRef.current = [];
+        setIsSpeaking(false);
+        isProcessingRef.current = false;
+      }
+    });
+
+    // Handle errors
+    voiceWS.on('error', (message) => {
+      console.error('[TTS] Error:', message.message);
+      audioChunksRef.current = [];
+      setIsSpeaking(false);
+      isProcessingRef.current = false;
+    });
+
+    return () => {
+      voiceWS.off('audio_chunk');
+      voiceWS.off('audio_end');
+      voiceWS.off('error');
+    };
+  }, [processQueue]);
+
+  const playAudioChunks = async (chunks: string[]) => {
+    try {
+      console.log('[TTS] Processing', chunks.length, 'base64 chunks');
+
+      // Decode each chunk individually to avoid base64 padding issues
+      const binaryChunks: Uint8Array[] = [];
+      let totalLength = 0;
+
+      for (let i = 0; i < chunks.length; i++) {
+        try {
+          const chunk = chunks[i];
+          const binaryString = atob(chunk);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let j = 0; j < binaryString.length; j++) {
+            bytes[j] = binaryString.charCodeAt(j);
+          }
+          binaryChunks.push(bytes);
+          totalLength += bytes.length;
+        } catch (error) {
+          console.error(`[TTS] Error decoding chunk ${i}:`, error);
+          console.error(`[TTS] Chunk ${i} data:`, chunks[i].substring(0, 50));
+          throw error;
+        }
+      }
+
+      console.log('[TTS] Decoded total bytes:', totalLength);
+
+      // Combine all binary chunks into one array
+      const combinedBytes = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of binaryChunks) {
+        combinedBytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      console.log('[TTS] Combined bytes length:', combinedBytes.length);
+
+      // Create blob and play
+      const audioBlob = new Blob([combinedBytes], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+    return new Promise<void>((resolve, reject) => {
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        resolve();
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        reject(new Error('Audio playback failed'));
+      };
+
+      audio.play().catch(reject);
+    });
+    } catch (error) {
+      console.error('[TTS] Error playing audio chunks:', error);
+      throw error;
+    }
+  };
 
   const speak = useCallback((text: string) => {
-    audioQueueManager.enqueue(text);
-  }, [audioQueueManager]);
+    console.log('[TTS] Adding to queue:', text);
+    queueRef.current.push(text);
+    console.log('[TTS] Queue length:', queueRef.current.length);
+    processQueue();
+  }, [processQueue]);
 
   const clearQueue = useCallback(() => {
-    audioQueueManager.clear();
-  }, [audioQueueManager]);
+    console.log('[TTS] Clearing queue');
+    queueRef.current = [];
+    audioChunksRef.current = [];
+    isProcessingRef.current = false;
+    setIsSpeaking(false);
+  }, []);
 
   return {
     isSpeaking,
     speak,
     clearQueue,
-    queueLength: audioQueueManager.getQueueLength(),
-    isActive: audioQueueManager.isActive()
+    queueLength: queueRef.current.length,
+    isActive: () => isProcessingRef.current
   };
-}
-
-// ============================================================================
-// AUDIO QUEUE MANAGEMENT
-// ============================================================================
-
-/**
- * Audio Queue Manager - Handles sequential playback of multiple TTS messages
- */
-export class AudioQueueManager {
-  private queue: string[] = [];
-  private isProcessing: boolean = false;
-  private currentAudio: HTMLAudioElement | null = null;
-  private onSpeakingChange?: (isSpeaking: boolean) => void;
-
-  constructor(onSpeakingChange?: (isSpeaking: boolean) => void) {
-    this.onSpeakingChange = onSpeakingChange;
-  }
-
-  /**
-   * Adds text to the queue and starts processing if not already running
-   */
-  enqueue(text: string): void {
-    console.log('➕ Adding to TTS queue:', text);
-    this.queue.push(text);
-    console.log('Queue length now:', this.queue.length);
-    this.processQueue();
-  }
-
-  /**
-   * Processes the audio queue sequentially
-   */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessing || this.queue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-    console.log('🎵 Starting audio queue processing');
-    console.log('Queue length:', this.queue.length);
-
-    while (this.queue.length > 0) {
-      const text = this.queue.shift();
-      if (!text) continue;
-
-      console.log('\n=== PROCESSING QUEUE ITEM ===');
-      console.log('Remaining in queue:', this.queue.length);
-      console.log('Text to convert:', text);
-
-      try {
-        this.onSpeakingChange?.(true);
-
-        // Stop previous audio if any
-        if (this.currentAudio) {
-          console.log('Stopping previous audio');
-          this.currentAudio.pause();
-          this.currentAudio.src = '';
-          this.currentAudio = null;
-        }
-
-        // Play the text-to-speech
-        const audio = await textToSpeechComplete(text);
-        this.currentAudio = audio;
-
-        this.onSpeakingChange?.(false);
-      } catch (err) {
-        console.error('Error processing queue item:', err);
-        this.onSpeakingChange?.(false);
-      }
-    }
-
-    this.isProcessing = false;
-    console.log('✅ Queue processing complete\n');
-  }
-
-  /**
-   * Clears the queue and stops current playback
-   */
-  clear(): void {
-    this.queue = [];
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.src = '';
-      this.currentAudio = null;
-    }
-    this.onSpeakingChange?.(false);
-  }
-
-  /**
-   * Gets the current queue length
-   */
-  getQueueLength(): number {
-    return this.queue.length;
-  }
-
-  /**
-   * Checks if the queue is currently processing
-   */
-  isActive(): boolean {
-    return this.isProcessing;
-  }
 }
