@@ -8,13 +8,15 @@ interface CameraStepProps {
   comments: string;
   onAnalysisComplete: (results: AnalysisResults) => void;
   onImageReady?: (uploadFn: (() => Promise<void>) | null) => void; // New prop to expose upload function
+  onNext?: () => void; // Add this prop to trigger the next step
 }
 
 const CameraStep: React.FC<CameraStepProps> = ({
   selectedIssues,
   comments,
   onAnalysisComplete,
-  onImageReady
+  onImageReady,
+  onNext // Add this prop
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [galleryImage, setGalleryImage] = useState<string | null>(null); // New state for gallery image preview
@@ -56,13 +58,15 @@ const CameraStep: React.FC<CameraStepProps> = ({
   const selectedIssuesRef = React.useRef(selectedIssues);
   const commentsRef = React.useRef(comments);
   const onAnalysisCompleteRef = React.useRef(onAnalysisComplete);
+  const onNextRef = React.useRef(onNext);
 
   // Update refs when values change
   React.useEffect(() => {
     selectedIssuesRef.current = selectedIssues;
     commentsRef.current = comments;
     onAnalysisCompleteRef.current = onAnalysisComplete;
-  }, [selectedIssues, comments, onAnalysisComplete]);
+    onNextRef.current = onNext;
+  }, [selectedIssues, comments, onAnalysisComplete, onNext]);
 
   const handleUploadImage = useCallback(async () => {
     setCameraError(null);
@@ -80,6 +84,14 @@ const CameraStep: React.FC<CameraStepProps> = ({
       console.error("handleUploadImage: Error during upload:", error);
     }
   }, [uploadImage]);
+
+  // NEW: Function to handle "Select this image" - triggers the same flow as Next button
+  const handleSelectImage = useCallback(async () => {
+    if (onNextRef.current) {
+      console.log("handleSelectImage: Calling onNext to trigger upload and step transition");
+      onNextRef.current();
+    }
+  }, []);
 
   // Handle gallery image selection - NEW FUNCTIONALITY
   const handleUploadImageButton = () => {
@@ -213,17 +225,16 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Camera view - USING EXISTING HOOK FUNCTIONALITY */}
+      {/* Camera view - UPDATED TO REMOVE GREY BOX */}
       {isCameraActive && !capturedImage && !galleryImage && (
         <div className="space-y-4">
-          <div className="relative bg-gray-200 rounded-lg border-2 border-gray-300 min-h-[300px] flex items-center justify-center overflow-hidden">
+          <div className="relative rounded-lg border-2 border-gray-300 overflow-hidden bg-black">
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
               className="w-full h-full rounded-lg"
-              style={{ maxHeight: '400px', objectFit: 'cover' }}
             />
             {/* Only show loading message when video is NOT ready */}
             {!isVideoReady && (
@@ -253,14 +264,14 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Captured image preview - USING EXISTING HOOK FUNCTIONALITY */}
+      {/* Captured image preview - UPDATED TO REMOVE GREY BOX */}
       {capturedImage && !galleryImage && (
         <div className="space-y-4">
-          <div className="bg-gray-200 rounded-lg border-2 border-gray-300 min-h-[300px] flex items-center justify-center">
+          <div className="rounded-lg border-2 border-gray-300 overflow-hidden">
             <img
               src={capturedImage}
               alt="Captured"
-              className="w-full rounded-lg max-h-[400px] object-cover"
+              className="w-full rounded-lg object-contain max-h-[400px]"
             />
           </div>
           <div className="flex space-x-3">
@@ -271,23 +282,23 @@ const CameraStep: React.FC<CameraStepProps> = ({
               Retake
             </button>
             <button
-              onClick={retakePhoto}
+              onClick={handleSelectImage}
               className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90"
             >
-              Clear Selection
+              Select this image
             </button>
           </div>
         </div>
       )}
 
-      {/* Gallery image preview - NEW FUNCTIONALITY */}
+      {/* Gallery image preview - UPDATED TO REMOVE GREY BOX */}
       {galleryImage && !capturedImage && !isCameraActive && (
         <div className="space-y-4">
-          <div className="bg-gray-200 rounded-lg border-2 border-gray-300 min-h-[300px] flex items-center justify-center">
+          <div className="rounded-lg border-2 border-gray-300 overflow-hidden">
             <img
               src={galleryImage}
               alt="Selected from gallery"
-              className="w-full rounded-lg max-h-[400px] object-cover"
+              className="w-full rounded-lg object-contain max-h-[400px]"
             />
           </div>
           <div className="flex space-x-3">
@@ -298,10 +309,10 @@ const CameraStep: React.FC<CameraStepProps> = ({
               Choose Different Image
             </button>
             <button
-              onClick={handleRetakeGalleryImage}
+              onClick={handleSelectImage}
               className="flex-1 bg-red text-white py-3 rounded-lg text-button-text font-medium hover:opacity-90"
             >
-              Clear Selection
+              Select this image
             </button>
           </div>
         </div>
