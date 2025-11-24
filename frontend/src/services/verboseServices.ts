@@ -14,7 +14,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 // WebSocket URL for verbose service
-const WEBSOCKET_URL = 'ws://127.0.0.1:8003/ws';
+// Use dynamic URL based on current location for port forwarding compatibility
+const getWebSocketURL = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host; // Gets host:port from current URL
+  return `${protocol}//${host}/ws-verbose`;
+};
+
+const WEBSOCKET_URL = getWebSocketURL();
 
 // Message type definitions
 interface WebSocketMessage {
