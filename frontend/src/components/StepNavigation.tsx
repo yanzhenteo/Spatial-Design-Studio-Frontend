@@ -21,7 +21,6 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   onConfirm,
   onEnd,
   isStep1Disabled = false,
-  isStep3Disabled = false,
   className = ''
 }) => {
   // Step configurations for button text and click handlers
@@ -50,6 +49,11 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
 
   const currentConfig = stepButtonConfigs[currentStep];
 
+  // Special case for step3 - no navigation buttons inside content card
+  if (currentStep === 'step3') {
+    return null;
+  }
+
   // Single button steps (step1 and recommendations)
   if (currentStep === 'step1' || currentStep === 'recommendations') {
     return (
@@ -77,7 +81,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
     );
   }
 
-  // Double buttons for intermediate steps (step2 and step3)
+  // Double buttons for step2
   return (
     <DoubleButton
       variant="danger"
@@ -87,8 +91,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
       }}
       rightButton={{
         onClick: currentConfig.onClick,
-        children: currentConfig.buttonText,
-        disabled: currentStep === 'step3' ? isStep3Disabled : false
+        children: currentConfig.buttonText
       }}
       className={className}
     />

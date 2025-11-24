@@ -10,16 +10,26 @@ import ProductRecommendationsStep from '../components/ProductRecommendationsStep
 import IssueSelectionStep from '../components/IssueSelectionStep';
 import CommentsStep from '../components/CommentsStep';
 import StepNavigation from '../components/StepNavigation';
+import Button from '../components/Button';
 import type { AnalysisResults } from '../utils/cameraUtils';
 
 interface FixMyHomeProps {
   onBack: () => void;
 }
 
+// Add this interface for step configurations
+interface StepConfig {
+  header: string;
+  content: string;
+  secondQuestion?: string;
+  symptomDescriptions?: string;
+}
+
 function FixMyHome({ onBack }: FixMyHomeProps) {
   const [currentStep, setCurrentStep] = useState<FeatureStep>('step1');
   const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
   const [comments, setComments] = useState('');
+  const [noChangeComments, setNoChangeComments] = useState('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [hasImageSelected, setHasImageSelected] = useState(false);
@@ -125,7 +135,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
   };
 
   // Step configurations
-  const stepConfigs = {
+  const stepConfigs: Record<FeatureStep, StepConfig> = {
     step1: {
       header: "What would you like to fix?",
       content: "You may pick one or more options:",
@@ -133,6 +143,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     step2: {
       header: formatSelectedIssues() || "Symptom Overview",
       content: "Any further comments or elaboration you would like to add?",
+      secondQuestion: "Is there anything that you do not want to change?",
       symptomDescriptions: getSymptomDescriptions().join(' '),
     },
     step3: {
@@ -179,7 +190,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
               {/* Symptom descriptions - only show on step2 */}
               {currentStep === 'step2' && (
                 <p className="text-big-text text-dark-grey opacity-80">
-                  {(currentConfig as any).symptomDescriptions}
+                  {currentConfig.symptomDescriptions}
                 </p>
               )}
             </HeaderCard>
@@ -198,6 +209,9 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 <CommentsStep
                   comments={comments}
                   onCommentsChange={setComments}
+                  noChangeComments={noChangeComments}
+                  onNoChangeCommentsChange={setNoChangeComments}
+                  secondQuestion={currentConfig.secondQuestion}
                 />
               )}
 
@@ -208,6 +222,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                   comments={comments}
                   onAnalysisComplete={handleAnalysisComplete}
                   onImageReady={handleImageReady}
+                  onNext={handleNext} // Added this prop
                 />
               )}
 
@@ -253,17 +268,30 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 />
               )}
 
-              {/* Step Navigation */}
-              <StepNavigation
-                currentStep={currentStep}
-                onBack={handleBack}
-                onNext={handleNext}
-                onConfirm={handleStart}
-                onEnd={handleEnd}
-                isStep1Disabled={selectedIssues.length === 0}
-                isStep3Disabled={!hasImageSelected || isProcessingImage}
-              />
+              {/* Step Navigation - Hidden for step3 */}
+              {currentStep !== 'step3' && (
+                <StepNavigation
+                  currentStep={currentStep}
+                  onBack={handleBack}
+                  onNext={handleNext}
+                  onConfirm={handleStart}
+                  onEnd={handleEnd}
+                  isStep1Disabled={selectedIssues.length === 0}
+                  isStep3Disabled={!hasImageSelected || isProcessingImage}
+                />
+              )}
             </ContentCard>
+
+            {/* Back Button for step3 - placed outside ContentCard */}
+            {currentStep === 'step3' && !isProcessingImage && (
+              <Button
+                variant="outline-light"
+                onClick={handleBack}
+                className="mt-6"
+              >
+                Back
+              </Button>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
