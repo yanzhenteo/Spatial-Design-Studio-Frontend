@@ -8,7 +8,6 @@ interface StepNavigationProps {
   onBack: () => void;
   onNext: () => void;
   onConfirm?: () => void;
-  onEnd?: () => void;
   isStep1Disabled?: boolean;
   isStep3Disabled?: boolean;
   className?: string;
@@ -19,7 +18,6 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   onBack,
   onNext,
   onConfirm,
-  onEnd,
   isStep1Disabled = false,
   className = ''
 }) => {
@@ -40,10 +38,6 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
     step4: {
       buttonText: 'Complete',
       onClick: onNext
-    },
-    recommendations: {
-      buttonText: 'End',
-      onClick: onEnd || onNext
     }
   };
 
@@ -54,26 +48,13 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
     return null;
   }
 
-  // Single button steps (step1 and recommendations)
-  if (currentStep === 'step1' || currentStep === 'recommendations') {
+  // Single button steps (step1 and step4)
+  if (currentStep === 'step1' || currentStep === 'step4') {
     return (
       <Button 
         variant="danger" 
         onClick={currentConfig.onClick}
         disabled={currentStep === 'step1' && isStep1Disabled}
-        className={className}
-      >
-        {currentConfig.buttonText}
-      </Button>
-    );
-  }
-
-  // Single button for step4
-  if (currentStep === 'step4') {
-    return (
-      <Button 
-        variant="danger" 
-        onClick={currentConfig.onClick}
         className={className}
       >
         {currentConfig.buttonText}

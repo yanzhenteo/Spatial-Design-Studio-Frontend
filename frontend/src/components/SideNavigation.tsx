@@ -1,4 +1,3 @@
-// src/components/SideNavigation.tsx
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SideNavigationProps {
@@ -46,7 +45,7 @@ function SideNavigation({ isOpen, onClose, currentPage = 'home', onNavigate }: S
             className="fixed left-0 top-0 h-full w-64 bg-white shadow-xl z-50"
           >
             {/* Header and Menu Items positioned from top */}
-            <div className="pt-30"> {/* Adjust this value to change distance from top */}
+            <div className="pt-20"> {/* Changed from pt-30 to pt-20 (5rem) */}
               {/* Header */}
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-header text-dark-grey">Menu</h2>

@@ -7,8 +7,9 @@ interface CameraStepProps {
   selectedIssues: string[];
   comments: string;
   onAnalysisComplete: (results: AnalysisResults) => void;
-  onImageReady?: (uploadFn: (() => Promise<void>) | null) => void; // New prop to expose upload function
-  onNext?: () => void; // Add this prop to trigger the next step
+  onImageReady?: (uploadFn: (() => Promise<void>) | null) => void;
+  onNext?: () => void;
+  onImageCaptured?: (imageDataUrl: string | null) => void;
 }
 
 const CameraStep: React.FC<CameraStepProps> = ({
@@ -16,10 +17,11 @@ const CameraStep: React.FC<CameraStepProps> = ({
   comments,
   onAnalysisComplete,
   onImageReady,
-  onNext // Add this prop
+  onNext,
+  onImageCaptured
 }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [galleryImage, setGalleryImage] = useState<string | null>(null); // New state for gallery image preview
+  const [galleryImage, setGalleryImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use the existing camera hook with the new callback
@@ -35,11 +37,18 @@ const CameraStep: React.FC<CameraStepProps> = ({
     uploadImage,
   } = useCamera(onAnalysisComplete);
 
-  // Enhanced camera functions with error handling - using the existing hook functions
+  // Add useEffect to notify parent when image is captured
+  React.useEffect(() => {
+    if (onImageCaptured) {
+      onImageCaptured(capturedImage);
+    }
+  }, [capturedImage, onImageCaptured]);
+
+  // Enhanced camera functions with error handling
   const handleStartCamera = async () => {
     setCameraError(null);
     try {
-      await startCamera(); // This uses the existing working function
+      await startCamera();
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to start camera');
     }
@@ -48,7 +57,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
   const handleCaptureImage = () => {
     setCameraError(null);
     try {
-      captureImage(); // This uses the existing working function
+      captureImage();
     } catch (error) {
       setCameraError(error instanceof Error ? error.message : 'Failed to capture image');
     }
@@ -59,6 +68,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
   const commentsRef = React.useRef(comments);
   const onAnalysisCompleteRef = React.useRef(onAnalysisComplete);
   const onNextRef = React.useRef(onNext);
+  const onImageCapturedRef = React.useRef(onImageCaptured);
 
   // Update refs when values change
   React.useEffect(() => {
@@ -66,7 +76,8 @@ const CameraStep: React.FC<CameraStepProps> = ({
     commentsRef.current = comments;
     onAnalysisCompleteRef.current = onAnalysisComplete;
     onNextRef.current = onNext;
-  }, [selectedIssues, comments, onAnalysisComplete, onNext]);
+    onImageCapturedRef.current = onImageCaptured;
+  }, [selectedIssues, comments, onAnalysisComplete, onNext, onImageCaptured]);
 
   const handleUploadImage = useCallback(async () => {
     setCameraError(null);
@@ -85,7 +96,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
     }
   }, [uploadImage]);
 
-  // NEW: Function to handle "Select this image" - triggers the same flow as Next button
+  // Function to handle "Select this image" - triggers the same flow as Next button
   const handleSelectImage = useCallback(async () => {
     if (onNextRef.current) {
       console.log("handleSelectImage: Calling onNext to trigger upload and step transition");
@@ -93,13 +104,13 @@ const CameraStep: React.FC<CameraStepProps> = ({
     }
   }, []);
 
-  // Handle gallery image selection - NEW FUNCTIONALITY
+  // Handle gallery image selection
   const handleUploadImageButton = () => {
     setCameraError(null);
     fileInputRef.current?.click();
   };
 
-  // Handle file selection from gallery - NEW FUNCTIONALITY
+  // Handle file selection from gallery - CONVERT TO BASE64
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -116,9 +127,21 @@ const CameraStep: React.FC<CameraStepProps> = ({
       return;
     }
 
-    // Create a URL for the selected image and show preview
-    const imageUrl = URL.createObjectURL(file);
-    setGalleryImage(imageUrl);
+    // Convert file to base64 data URL instead of blob URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageDataUrl = e.target?.result as string;
+      setGalleryImage(imageDataUrl);
+      
+      // Notify parent about the captured image
+      if (onImageCapturedRef.current) {
+        onImageCapturedRef.current(imageDataUrl);
+      }
+    };
+    reader.onerror = () => {
+      setCameraError('Failed to read image file');
+    };
+    reader.readAsDataURL(file);
 
     // Reset the file input
     event.target.value = '';
@@ -138,13 +161,13 @@ const CameraStep: React.FC<CameraStepProps> = ({
     setCameraError(null);
 
     try {
-      // Convert the object URL back to a blob
-      const response = await fetch(galleryImageRef.current);
-      const blob = await response.blob();
-
       console.log("handleGalleryImageUpload: Starting image analysis and transformation pipeline for gallery image...");
       console.log("handleGalleryImageUpload: Selected issues:", selectedIssuesRef.current);
       console.log("handleGalleryImageUpload: Comments:", commentsRef.current);
+
+      // Convert base64 data URL to blob
+      const response = await fetch(galleryImageRef.current);
+      const blob = await response.blob();
 
       // Call the analysis and transformation service (same as camera upload)
       const result = await analyzeAndTransformImage(blob);
@@ -184,28 +207,20 @@ const CameraStep: React.FC<CameraStepProps> = ({
     } else if (galleryImage) {
       onImageReady(handleGalleryImageUpload);
     } else {
-      onImageReady(null); // Clear the upload function when no image
+      onImageReady(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capturedImage, galleryImage, handleUploadImage, handleGalleryImageUpload]);
+  }, [capturedImage, galleryImage, handleUploadImage, handleGalleryImageUpload, onImageReady]);
 
   // Retake gallery image
   const handleRetakeGalleryImage = () => {
-    if (galleryImage) {
-      URL.revokeObjectURL(galleryImage); // Clean up the object URL
-    }
     setGalleryImage(null);
     setCameraError(null);
+    
+    // Notify parent that image is cleared
+    if (onImageCapturedRef.current) {
+      onImageCapturedRef.current(null);
+    }
   };
-
-  // Clean up object URLs when component unmounts
-  React.useEffect(() => {
-    return () => {
-      if (galleryImage) {
-        URL.revokeObjectURL(galleryImage);
-      }
-    };
-  }, [galleryImage]);
 
   return (
     <div className="w-full mb-6 space-y-4">
@@ -225,7 +240,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Camera view - UPDATED TO REMOVE GREY BOX */}
+      {/* Camera view */}
       {isCameraActive && !capturedImage && !galleryImage && (
         <div className="space-y-4">
           <div className="relative rounded-lg border-2 border-gray-300 overflow-hidden bg-black">
@@ -264,7 +279,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Captured image preview - UPDATED TO REMOVE GREY BOX */}
+      {/* Captured image preview */}
       {capturedImage && !galleryImage && (
         <div className="space-y-4">
           <div className="rounded-lg border-2 border-gray-300 overflow-hidden">
@@ -291,7 +306,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
         </div>
       )}
 
-      {/* Gallery image preview - UPDATED TO REMOVE GREY BOX */}
+      {/* Gallery image preview */}
       {galleryImage && !capturedImage && !isCameraActive && (
         <div className="space-y-4">
           <div className="rounded-lg border-2 border-gray-300 overflow-hidden">
@@ -303,7 +318,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={handleUploadImageButton}
+              onClick={handleRetakeGalleryImage}
               className="flex-1 bg-gray-300 text-dark-grey py-3 rounded-lg text-button-text font-medium hover:opacity-90"
             >
               Choose Different Image

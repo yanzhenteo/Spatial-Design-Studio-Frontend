@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type FeatureStep = 'step1' | 'step2' | 'step3' | 'step4' | 'recommendations';
+export type FeatureStep = 'step1' | 'step2' | 'step3' | 'step4';
 
 interface StepIndicatorProps {
   currentStep: FeatureStep;
@@ -8,7 +8,7 @@ interface StepIndicatorProps {
 }
 
 const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, className = '' }) => {
-  const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4', 'recommendations'];
+  const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4'];
   const currentIndex = steps.indexOf(currentStep);
 
   return (

@@ -1,4 +1,3 @@
-// src/pages/HomePage.tsx
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import HeaderCard from '../components/HeaderCard';
@@ -32,10 +31,10 @@ function HomePage({ onStart, onNavigate, currentPage }: HomePageProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen bg-gradient-pink-to-purple flex flex-col items-center justify-center p-6"
+        className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-pink-to-purple"
       >
         {/* Menu Button */}
-        <div className="w-full max-w-md absolute top-30 left-6">
+        <div className="absolute top-6 left-6 z-20">
           <button
             onClick={toggleSideNav}
             className="text-muted-purple text-button-text flex items-center gap-2"
@@ -47,26 +46,33 @@ function HomePage({ onStart, onNavigate, currentPage }: HomePageProps) {
           </button>
         </div>
 
-        {/* Main Content */}
-        <div className="w-full max-w-md space-y-6">
-          {/* Header Card */}
-          <HeaderCard>
-            <h1 className="text-header text-dark-grey">Fix My Home</h1>
-          </HeaderCard>
+        {/* Main Content - Exactly like LoginPage */}
+        <div className="w-full flex items-center justify-center min-h-screen px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="w-full max-w-md"
+          >
+            {/* Header Card */}
+            <HeaderCard className="mb-6">
+              <h1 className="text-header text-dark-grey">Fix My Home</h1>
+            </HeaderCard>
 
-          {/* Content Card */}
-          <ContentCard>
-            <h2 className="text-header text-dark-grey text-center mb-4">
-              How it works:
-            </h2>
-            <p className="text-big-text text-dark-grey text-center">
-              Based on your analysis, we will recommend changes or improvements to be implemented in your home. 
-            </p>
-            
-            <Button variant="danger" onClick={handleStart}>
-              Start
-            </Button>
-          </ContentCard>
+            {/* Content Card */}
+            <ContentCard>
+              <h2 className="text-header text-dark-grey text-center mb-4">
+                How it works:
+              </h2>
+              <p className="text-big-text text-dark-grey text-center mb-6">
+                Based on your analysis, we will recommend changes or improvements to be implemented in your home. 
+              </p>
+              
+              <Button variant="danger" onClick={handleStart}>
+                Start
+              </Button>
+            </ContentCard>
+          </motion.div>
         </div>
       </motion.div>
 
