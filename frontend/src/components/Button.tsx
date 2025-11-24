@@ -7,7 +7,7 @@ interface ButtonProps {
   type?: 'button' | 'submit' | 'reset';
   className?: string;
   disabled?: boolean;
-  variant?: 'primary' | 'danger';
+  variant?: 'primary' | 'danger' | 'outline-light';
 }
 
 function Button({ 
@@ -22,7 +22,8 @@ function Button({
   
   const variantClasses = {
     primary: "bg-muted-purple text-white active:bg-dark-purple",
-    danger: "bg-red text-white active:bg-red-700"
+    danger: "bg-red text-white active:bg-red-700",
+    'outline-light': "bg-white/30 border border-dark-grey text-dark-grey active:bg-white/50"
   };
 
   return (
