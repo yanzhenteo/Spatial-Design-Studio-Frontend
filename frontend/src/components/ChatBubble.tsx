@@ -16,7 +16,7 @@ function ChatBubble({ message, isUser, timestamp = new Date() }: ChatBubbleProps
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
     >
       <div
-        className={`max-w-[70%] rounded-2xl p-4 ${
+        className={`max-w-[85%] rounded-2xl p-4 ${
           isUser 
             ? 'bg-white text-dark-grey rounded-br-none' 
             : 'bg-light-yellow text-dark-grey rounded-bl-none'

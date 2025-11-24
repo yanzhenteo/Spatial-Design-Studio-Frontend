@@ -76,7 +76,7 @@ function ToggleQuestionnaire({
       className="flex gap-4 mb-4"
     >
       {/* Main questionnaire bubble */}
-      <div className="flex-1 max-w-[70%]">
+      <div className="flex-1 max-w-[85%]">
         <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-6 space-y-4">
           {/* Header message */}
           <div className="mb-4">

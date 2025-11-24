@@ -44,6 +44,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [hasActiveQuestionnaire, setHasActiveQuestionnaire] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [phase1Complete, setPhase1Complete] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +85,14 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
     return () => clearTimeout(timer);
   }, [textToSpeech]); // textToSpeech is stable from the hook
+
+  // Detect completion message and ensure phase4Complete is set
+  useEffect(() => {
+    const hasCompletionMessage = messages.some(msg => msg.text?.includes('Thank you for sharing'));
+    if (hasCompletionMessage && !phase4Complete) {
+      setPhase4Complete(true);
+    }
+  }, [messages, phase4Complete, setPhase4Complete]);
 
   const saveConversation = async () => {
     try {
@@ -182,6 +191,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
             setCurrentTopicIndex(transitionResult.nextTopicIndex);
           }
 
+          // Set phase4Complete BEFORE adding messages to ensure render picks it up
           if (transitionResult.phase4Complete) {
             setPhase4Complete(true);
           }
@@ -265,21 +275,23 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         {/* Title */}
         <h1 className="text-header text-dark-grey">Memory Bot</h1>
 
-        {/* Next Button */}
-        <button
-          onClick={phase4Complete ? saveConversation : onNext}
-          disabled={isSubmitting}
-          className={`text-button-text flex items-center gap-2 transition-opacity ${
-            phase4Complete
-              ? 'bg-orange text-white px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50'
-              : 'text-muted-purple disabled:opacity-50'
-          }`}
-        >
-          {isSubmitting ? 'Saving...' : 'Next'}
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        {/* Next Button - Only visible during Phase 1 or after Phase 4 */}
+        {(phase1Complete && !phase4Complete) && (
+          <button
+            onClick={saveConversation}
+            disabled={isSubmitting}
+            className="text-button-text flex items-center gap-2 transition-opacity text-muted-purple disabled:opacity-50"
+          >
+            {isSubmitting ? 'Saving...' : 'Next'}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+        {/* Invisible placeholder to maintain layout when button is hidden */}
+        {(!phase1Complete || phase4Complete) && (
+          <div className="w-12 h-4" />
+        )}
       </div>
 
       {/* Scrollable Messages Area */}
@@ -320,6 +332,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                     }
 
                     setHasActiveQuestionnaire(false);
+                  } else if (isFirstQuestionnaire) {
+                    // Phase 1 complete after symptom questionnaire
+                    setPhase1Complete(true);
                   }
 
                   setMessages(updatedMessages);
@@ -328,8 +343,9 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
             );
           }
 
-          // Check if this is the completion message and render with a button
-          if (phase4Complete && message.text?.includes('Thank you for sharing')) {
+          // Check if this is the completion message and add button inside
+          const isCompletionMessage = message.text?.includes('Thank you for sharing');
+          if (isCompletionMessage) {
             return (
               <div key={message.id} className="flex justify-start mb-4">
                 <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-6 max-w-[70%] space-y-4">
@@ -337,18 +353,21 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                   <p className="text-fill-text text-dark-grey opacity-70 mt-1">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <button
-                    onClick={saveConversation}
-                    disabled={isSubmitting}
-                    className="w-full bg-orange text-white py-3 rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    {isSubmitting ? 'Saving...' : 'Next'}
-                  </button>
+                  <div className="pt-4">
+                    <button
+                      onClick={saveConversation}
+                      disabled={isSubmitting}
+                      className="w-full bg-orange-400 text-white text-button-text font-semibold py-3 px-6 rounded-full hover:bg-orange-500 transition-colors duration-200 disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving...' : 'Next'}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           }
 
+          // Regular message rendering
           return (
             <ChatBubble
               key={message.id}
@@ -406,6 +425,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
             </div>
         </div>
       </div>
+
     </motion.div>
   );
 }

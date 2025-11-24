@@ -1,4 +1,3 @@
-// src/utils/cameraUtils.ts
 import { useState, useRef, useEffect, type RefObject } from 'react';
 import { analyzeAndTransformImage, type Issue } from '../services/imageAnalysisService';
 

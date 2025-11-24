@@ -6,7 +6,6 @@ import StepIndicator, { type FeatureStep } from '../components/StepIndicator';
 import BackButton from '../components/BackButton';
 import CameraStep from '../components/CameraStep';
 import ResultsStep from '../components/ResultsStep';
-import ProductRecommendationsStep from '../components/ProductRecommendationsStep';
 import IssueSelectionStep from '../components/IssueSelectionStep';
 import CommentsStep from '../components/CommentsStep';
 import StepNavigation from '../components/StepNavigation';
@@ -33,6 +32,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [hasImageSelected, setHasImageSelected] = useState(false);
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
 
   // Use ref instead of state to avoid triggering re-renders
   const imageUploadFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -48,6 +48,12 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     setCurrentStep('step4');
   }, []);
 
+  // Add a new function to handle when an image is captured/selected
+  const handleImageCaptured = useCallback((imageDataUrl: string | null) => {
+    setOriginalImage(imageDataUrl);
+    setHasImageSelected(imageDataUrl !== null);
+  }, []);
+
   // Handle image ready callback from CameraStep
   const handleImageReady = useCallback((uploadFn: (() => Promise<void>) | null) => {
     imageUploadFnRef.current = uploadFn;
@@ -57,7 +63,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
 
   // Define handleNext first using useCallback to avoid recreation
   const handleNext = useCallback(async () => {
-    const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4', 'recommendations'];
+    const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4'];
     const currentIndex = steps.indexOf(currentStep);
 
     // If we're on step3 and have an image ready, trigger upload
@@ -74,15 +80,18 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
       }
     } else if (currentIndex < steps.length - 1) {
       setCurrentStep(steps[currentIndex + 1]);
+    } else if (currentStep === 'step4') {
+      // When on step4 and clicking next, go back to homepage
+      onBack();
     }
-  }, [currentStep]);
+  }, [currentStep, onBack]);
 
   const handleStart = () => {
     setCurrentStep('step2');
   };
 
   const handleBack = () => {
-    const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4', 'recommendations'];
+    const steps: FeatureStep[] = ['step1', 'step2', 'step3', 'step4'];
     const currentIndex = steps.indexOf(currentStep);
     if (currentIndex > 0) {
       setCurrentStep(steps[currentIndex - 1]);
@@ -129,11 +138,6 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     return selectedIssues.map(issue => descriptions[issue] || '').filter(desc => desc !== '');
   };
 
-  // Handle end button click - go back to homepage
-  const handleEnd = () => {
-    onBack();
-  };
-
   // Step configurations
   const stepConfigs: Record<FeatureStep, StepConfig> = {
     step1: {
@@ -153,10 +157,6 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     step4: {
       header: "Results",
       content: "Based on your assessment, here are our recommendations:",
-    },
-    recommendations: {
-      header: "Let's make changes!",
-      content: "Here are some recommended products to help implement the improvements:",
     }
   };
 
@@ -222,7 +222,8 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                   comments={comments}
                   onAnalysisComplete={handleAnalysisComplete}
                   onImageReady={handleImageReady}
-                  onNext={handleNext} // Added this prop
+                  onNext={handleNext}
+                  onImageCaptured={handleImageCaptured}
                 />
               )}
 
@@ -243,12 +244,9 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
 
               {/* Results content - only show on step4 */}
               {currentStep === 'step4' && (
-                <ResultsStep analysisResults={analysisResults} />
-              )}
-
-              {/* Product recommendations - only show on recommendations step */}
-              {currentStep === 'recommendations' && (
-                <ProductRecommendationsStep currentStep={currentStep}
+                <ResultsStep 
+                  analysisResults={analysisResults} 
+                  originalImage={originalImage}
                 />
               )}
 
@@ -260,8 +258,8 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 />
               )}
 
-              {/* Step Indicator - Show on all steps except recommendations (now handled inside ProductRecommendationsStep) */}
-              {currentStep !== 'recommendations' && currentStep !== 'step4' && (
+              {/* Step Indicator - Show on all steps except step4 */}
+              {currentStep !== 'step4' && (
                 <StepIndicator 
                   currentStep={currentStep} 
                   className="mb-6" 
@@ -275,7 +273,6 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                   onBack={handleBack}
                   onNext={handleNext}
                   onConfirm={handleStart}
-                  onEnd={handleEnd}
                   isStep1Disabled={selectedIssues.length === 0}
                   isStep3Disabled={!hasImageSelected || isProcessingImage}
                 />
