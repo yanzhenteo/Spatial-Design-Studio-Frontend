@@ -22,8 +22,8 @@ function ChatBubble({ message, isUser, timestamp = new Date() }: ChatBubbleProps
             : 'bg-light-yellow text-dark-grey rounded-bl-none'
         }`}
       >
-        <p className="text-big-text">{message}</p>
-        <p className="text-fill-text text-dark-grey opacity-70 mt-1">
+        <p className="text-button-text">{message}</p>
+        <p className="text-fill-text text-dark-grey opacity-70 mt-1" style={{ fontSize: '12px' }}>
           {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>

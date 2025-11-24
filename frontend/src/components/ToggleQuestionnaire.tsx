@@ -22,19 +22,43 @@ function ToggleQuestionnaire({
   maxSelections
 }: ToggleQuestionnaireProps) {
   const [questions, setQuestions] = useState<QuestionItem[]>(initialQuestions);
+  const [selectionOrder, setSelectionOrder] = useState<string[]>([]);
 
   const handleToggle = (id: string) => {
     setQuestions(prev => {
       const currentQuestion = prev.find(q => q.id === id);
       const selectedCount = prev.filter(q => q.selected).length;
 
-      // If max selections is set and user tries to select more than allowed (and it's currently not selected)
-      if (maxSelections && !currentQuestion?.selected && selectedCount >= maxSelections) {
-        return prev; // Don't allow more selections
+      // If clicking to deselect
+      if (currentQuestion?.selected) {
+        setSelectionOrder(prevOrder => prevOrder.filter(itemId => itemId !== id));
+        return prev.map(q =>
+          q.id === id ? { ...q, selected: false } : q
+        );
       }
 
+      // If trying to select more than maxSelections allows
+      if (maxSelections && selectedCount >= maxSelections) {
+        // Remove the first (oldest) selected item
+        const firstSelectedId = selectionOrder[0];
+        setSelectionOrder(prevOrder => prevOrder.slice(1));
+
+        return prev.map(q => {
+          if (q.id === id) {
+            // Select the new item
+            return { ...q, selected: true };
+          } else if (q.id === firstSelectedId) {
+            // Deselect the oldest item
+            return { ...q, selected: false };
+          }
+          return q;
+        });
+      }
+
+      // Normal selection within limits
+      setSelectionOrder(prevOrder => [...prevOrder, id]);
       return prev.map(q =>
-        q.id === id ? { ...q, selected: !q.selected } : q
+        q.id === id ? { ...q, selected: true } : q
       );
     });
   };
