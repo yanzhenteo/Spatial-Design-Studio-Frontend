@@ -4,6 +4,7 @@ import { generateAIQuestion } from '../utils/aiQuestionGenerator';
 import type { ConversationContext } from '../utils/aiQuestionGenerator';
 import { generateProbingQuestions } from './chatservice';
 import type { Message, TopicConversation } from '../types/chat.types';
+import { fetchWithRetry } from './networkUtils'; // NEW
 
 export interface ConversationData {
   selectedTopics: string[];
@@ -41,14 +42,22 @@ export async function saveConversation(
   try {
     const token = getAuthToken();
 
-    const response = await fetch('/api/conversations/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+    const response = await fetchWithRetry(
+      '/api/conversations/save',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(conversationData)
       },
-      body: JSON.stringify(conversationData)
-    });
+      {
+        retries: 2,       // total 3 attempts
+        retryDelayMs: 800,
+        timeoutMs: 8000,  // 8s per attempt
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to save conversation: ${response.status}`);
