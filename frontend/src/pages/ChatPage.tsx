@@ -98,6 +98,14 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     try {
       setIsSubmitting(true);
 
+      // DEBUG: log what we're about to save
+      const firstQuestionnaire = messages[0]?.questionnaire;
+      if (firstQuestionnaire) {
+        console.log('[ChatPage] Saving questionnaire questions:', firstQuestionnaire.questions);
+      } else {
+        console.log('[ChatPage] No questionnaire found on first message.');
+      }
+
       // Prepare conversation data using the service
       const conversationData = prepareConversationData(
         selectedTopics,
@@ -305,8 +313,31 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                 questions={message.questionnaire.questions}
                 maxSelections={message.questionnaire.maxSelections}
                 onComplete={(selectedQuestions) => {
+                  // --- NEW: persist selected state into messages[index].questionnaire.questions ---
+                  setMessages(prev => {
+                    const next = [...prev];
+
+                    const current = next[index];
+                    if (current.type === 'questionnaire' && current.questionnaire) {
+                      // Build full questions array with correct selected flags
+                      const fullQuestions = current.questionnaire.questions.map(q => ({
+                        ...q,
+                        selected: selectedQuestions.some(sq => sq.id === q.id),
+                      }));
+
+                      current.questionnaire = {
+                        ...current.questionnaire,
+                        questions: fullQuestions,
+                      };
+                    }
+
+                    return next;
+                  });
+                  // --- END NEW ---
+
                   // Determine which questionnaire this is based on content
-                  const isFirstQuestionnaire = message.questionnaire?.initialMessage.includes('symptoms') || false;
+                  const isFirstQuestionnaire =
+                    message.questionnaire?.initialMessage.includes('symptoms') || false;
 
                   // Use utility function to handle questionnaire completion
                   const result = handleQuestionnaireCompletion(
@@ -315,15 +346,16 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
                     textToSpeech
                   );
 
-                  // Build updated messages array
-                  const updatedMessages = [...messages.slice(0, index + 1), result.userResponseMessage];
+                  // Build updated messages array (append response and next questionnaire)
+                  const updatedMessages = [
+                    ...messages.slice(0, index + 1),
+                    result.userResponseMessage,
+                  ];
 
-                  // Add next questionnaire if provided
                   if (result.nextQuestionnaire) {
                     updatedMessages.push(result.nextQuestionnaire);
                   }
 
-                  // Handle Phase 4 transition
                   if (result.shouldTransitionToPhase4 && result.selectedActivities) {
                     initializeTopicConversations(result.selectedActivities);
 
@@ -333,7 +365,6 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
                     setHasActiveQuestionnaire(false);
                   } else if (isFirstQuestionnaire) {
-                    // Phase 1 complete after symptom questionnaire
                     setPhase1Complete(true);
                   }
 

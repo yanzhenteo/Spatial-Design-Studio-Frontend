@@ -1,15 +1,16 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import HeaderCard from '../components/HeaderCard';
 import ContentCard from '../components/ContentCard';
 import StepIndicator, { type FeatureStep } from '../components/StepIndicator';
 import BackButton from '../components/BackButton';
 import CameraStep from '../components/CameraStep';
 import ResultsStep from '../components/ResultsStep';
-import IssueSelectionStep from '../components/IssueSelectionStep';
+import IssueSelectionStep, { ALL_ISSUES } from '../components/IssueSelectionStep';
 import CommentsStep from '../components/CommentsStep';
 import StepNavigation from '../components/StepNavigation';
 import Button from '../components/Button';
+import { fetchIssuesFromLastConversation } from '../services/conversationIssueService';
 import type { AnalysisResults } from '../utils/cameraUtils';
 
 interface FixMyHomeProps {
@@ -27,6 +28,7 @@ interface StepConfig {
 function FixMyHome({ onBack }: FixMyHomeProps) {
   const [currentStep, setCurrentStep] = useState<FeatureStep>('step1');
   const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
+  const [visibleIssues, setVisibleIssues] = useState<string[]>(ALL_ISSUES);
   const [comments, setComments] = useState('');
   const [noChangeComments, setNoChangeComments] = useState('');
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
@@ -125,18 +127,50 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     return capitalizedIssues.slice(0, -1).join(', ') + ' and ' + capitalizedIssues.slice(-1);
   };
 
-  // Symptom descriptions for each issue
+  // UPDATED: Symptom descriptions aligned with ALL_ISSUES
   const getSymptomDescriptions = () => {
     const descriptions: Record<string, string> = {
-      'Way-finding': 'Difficulty navigating familiar spaces and getting lost in the home.',
-      'Glare sensitivity': 'Eyes are easily bothered by bright lights and reflections.',
-      'Misplacing items': 'Frequently losing track of everyday objects like keys and glasses.',
-      'Forgetfulness': 'Trouble remembering recent events and daily routines.',
-      'Lack spatial perception': 'Misjudging distances and having trouble with depth perception.'
+      'Depth misjudgment': 'Difficulty judging steps, edges, or depth, which can increase fall risk.',
+      'Pattern confusion': 'Patterned floors or shiny surfaces cause confusion or hesitation.',
+      'Glare sensitivity': 'Eyes are easily bothered by bright lights, glare, or strong reflections.',
+      'Mirror confusion': 'Mirrors sometimes cause confusion, distress, or misrecognition.',
+      'Door confusion': 'Tends to go to the wrong door or has difficulty finding the right one.',
+      'Night misorientation': 'At night, they may head toward the wrong room or exit instead of the bathroom.',
+      'Bathroom slips': 'History of slipping or nearly falling in the bathroom recently.',
+      'Stair difficulty': 'Has difficulty using stairs safely or confidently.',
+      'Needs visibility': 'Loses track of items unless they are clearly visible and well organised.',
+      'Clutter sensitivity': 'Feels overwhelmed or unsafe when there is clutter or too many objects on a surface.',
     };
 
-    return selectedIssues.map(issue => descriptions[issue] || '').filter(desc => desc !== '');
+    return selectedIssues
+      .map(issue => descriptions[issue] || '')
+      .filter(desc => desc !== '');
   };
+
+  // PRELOAD ISSUES FROM LAST MEMORY BOT CONVERSATION
+  useEffect(() => {
+    (async () => {
+      const issuesFromConversation = await fetchIssuesFromLastConversation();
+      console.log('[FixMyHome] issuesFromConversation:', issuesFromConversation);
+
+      if (issuesFromConversation.length > 0) {
+        // Only show buttons for issues that were true in Memory Bot
+        const filtered = ALL_ISSUES.filter(issue =>
+          issuesFromConversation.includes(issue)
+        );
+        console.log('[FixMyHome] visibleIssues (filtered):', filtered);
+        setVisibleIssues(filtered);
+
+        // IMPORTANT CHANGE: do NOT preselect them,
+        // let the user choose manually on this page.
+        // setSelectedIssues(issuesFromConversation);
+      } else {
+        console.log('[FixMyHome] No issues from conversation, showing ALL_ISSUES.');
+        setVisibleIssues(ALL_ISSUES);
+        // selectedIssues stays [] so nothing is preselected.
+      }
+    })();
+  }, []);
 
   // Step configurations
   const stepConfigs: Record<FeatureStep, StepConfig> = {
@@ -157,7 +191,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     step4: {
       header: "Results",
       content: "Based on your assessment, here are our recommendations:",
-    }
+    },
   };
 
   const currentConfig = stepConfigs[currentStep];
@@ -255,6 +289,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 <IssueSelectionStep
                   selectedIssues={selectedIssues}
                   onToggleIssue={toggleIssue}
+                  issues={visibleIssues}
                 />
               )}
 

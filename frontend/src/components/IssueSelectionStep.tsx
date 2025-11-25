@@ -3,19 +3,30 @@ import React from 'react';
 interface IssueSelectionStepProps {
   selectedIssues: string[];
   onToggleIssue: (issue: string) => void;
+  issues?: string[]; // NEW: subset to render, if provided
 }
+
+// Export full list so other modules can reuse it if needed
+export const ALL_ISSUES = [
+  'Depth misjudgment',      // q1
+  'Pattern confusion',      // q2
+  'Glare sensitivity',      // q3
+  'Mirror confusion',       // q4
+  'Door confusion',         // q5
+  'Night misorientation',   // q6
+  'Bathroom slips',         // q7
+  'Stair difficulty',       // q8
+  'Needs visibility',       // q9
+  'Clutter sensitivity'     // q10
+];
 
 const IssueSelectionStep: React.FC<IssueSelectionStepProps> = ({
   selectedIssues,
-  onToggleIssue
+  onToggleIssue,
+  issues
 }) => {
-  const issueButtons = [
-    'Way-finding',
-    'Glare sensitivity', 
-    'Misplacing items',
-    'Forgetfulness',
-    'Lack spatial perception'
-  ];
+  // Use provided subset if given, else all 10
+  const issueButtons = issues ?? ALL_ISSUES;
 
   return (
     <>
