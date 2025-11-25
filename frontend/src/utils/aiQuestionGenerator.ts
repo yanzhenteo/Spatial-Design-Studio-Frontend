@@ -39,6 +39,8 @@ export interface ConversationContext {
   firstFollowUpAnswer?: string;
 }
 
+import { fetchWithRetry } from '../services/networkUtils';
+
 export async function generateAIQuestion(
   topic: string,
   context: ConversationContext,
@@ -75,30 +77,32 @@ Please generate one warm, simple follow-up question based on their response. Ret
   }
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'Memory Bot',
-        'Content-Type': 'application/json'
+    const response = await fetchWithRetry(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'Memory Bot',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4.1-nano',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userMessage }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        })
       },
-      body: JSON.stringify({
-        model: 'openai/gpt-4.1-nano',
-        messages: [
-          {
-            role: 'system',
-            content: SYSTEM_PROMPT
-          },
-          {
-            role: 'user',
-            content: userMessage
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 150
-      })
-    });
+      {
+        retries: 2,
+        retryDelayMs: 800,
+        timeoutMs: 15000, // OpenRouter can be a bit slower
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`API request failed with status ${response.status}`);
