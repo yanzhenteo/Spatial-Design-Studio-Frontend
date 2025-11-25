@@ -9,6 +9,7 @@ interface ResultsStepProps {
 const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImage }) => {
   const [currentIssueIndex, setCurrentIssueIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'comparison' | 'recommendations'>('comparison');
+  const [sliderPosition, setSliderPosition] = useState(50); // Percentage (0-100)
 
   if (!analysisResults) {
     return (
@@ -50,7 +51,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            Before & After
+            Comparison
           </button>
           <button
             onClick={() => setActiveTab('recommendations')}
@@ -66,45 +67,104 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
 
         {/* Tab Content */}
         <div className="p-4">
-          {/* Before & After Tab */}
+          {/* Comparison Tab with Interactive Slider */}
           {activeTab === 'comparison' && (
             <div>
-              {(originalImage || transformedImageUrl) ? (
+              {(originalImage && transformedImageUrl) ? (
                 <>
                   <h3 className="text-lg font-semibold text-dark-grey mb-3 text-center">
-                    Before & After
+                    Comparison
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Before Image */}
-                    {originalImage && (
-                      <div className="text-center">
-                        <h4 className="font-medium text-dark-grey mb-2">Before</h4>
-                        <div className="bg-gray-100 rounded-lg overflow-hidden">
-                          <img
-                            src={originalImage}
-                            alt="Original space before improvements"
-                            className="w-full h-auto max-h-[300px] object-contain"
-                          />
-                        </div>
-                      </div>
-                    )}
 
-                    {/* After Image */}
-                    {transformedImageUrl && (
-                      <div className="text-center">
-                        <h4 className="font-medium text-dark-grey mb-2">Improved Space</h4>
-                        <div className="bg-gray-100 rounded-lg overflow-hidden">
-                          <img
-                            src={transformedImageUrl}
-                            alt="Transformed space with improvements"
-                            className="w-full h-auto max-h-[300px] object-contain"
-                          />
+                  {/* Interactive Before/After Slider */}
+                  <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden">
+                    {/* Before Image (Full Background) - This sets the container height */}
+                    <img
+                      src={originalImage}
+                      alt="Original space before improvements"
+                      className="w-full h-auto max-h-[400px] object-contain pointer-events-none select-none"
+                    />
+
+                    {/* After Image (Clipped by slider) - Absolute positioned overlay */}
+                    <div
+                      className="absolute top-0 left-0 h-full w-full overflow-hidden pointer-events-none"
+                      style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+                    >
+                      <img
+                        src={transformedImageUrl}
+                        alt="Transformed space with improvements"
+                        className="w-full h-auto max-h-[400px] object-contain select-none"
+                      />
+                    </div>
+
+                    {/* Slider Handle */}
+                    <div
+                      className="absolute top-0 h-full w-1 bg-white shadow-lg pointer-events-none z-10"
+                      style={{ left: `${sliderPosition}%` }}
+                    >
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center">
+                        <div className="flex gap-1">
+                          <div className="w-0.5 h-4 bg-gray-400"></div>
+                          <div className="w-0.5 h-4 bg-gray-400"></div>
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Invisible overlay for dragging */}
+                    <div
+                      className="absolute top-0 left-0 w-full h-full cursor-ew-resize z-20"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const container = e.currentTarget;
+                        const rect = container.getBoundingClientRect();
+
+                        const handleMouseMove = (moveEvent: MouseEvent) => {
+                          const x = moveEvent.clientX - rect.left;
+                          const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                          setSliderPosition(percentage);
+                        };
+
+                        const handleMouseUp = () => {
+                          document.removeEventListener('mousemove', handleMouseMove);
+                          document.removeEventListener('mouseup', handleMouseUp);
+                        };
+
+                        document.addEventListener('mousemove', handleMouseMove);
+                        document.addEventListener('mouseup', handleMouseUp);
+                      }}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        const container = e.currentTarget;
+                        const rect = container.getBoundingClientRect();
+
+                        const handleTouchMove = (moveEvent: TouchEvent) => {
+                          moveEvent.preventDefault();
+                          if (moveEvent.touches.length > 0) {
+                            const x = moveEvent.touches[0].clientX - rect.left;
+                            const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                            setSliderPosition(percentage);
+                          }
+                        };
+
+                        const handleTouchEnd = () => {
+                          document.removeEventListener('touchmove', handleTouchMove);
+                          document.removeEventListener('touchend', handleTouchEnd);
+                        };
+
+                        document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                        document.addEventListener('touchend', handleTouchEnd);
+                      }}
+                    />
                   </div>
-                  <p className="text-sm text-gray-600 mt-2 text-center">
-                    Comparison showing recommended improvements
+
+                  {/* Labels below image */}
+                  <div className="flex justify-between items-center mt-2 px-2">
+                    <span className="bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">Before</span>
+                    <span className="bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">After</span>
+                  </div>
+
+                  <p className="text-sm text-gray-600 mt-1 text-center">
+                    Drag the slider to compare before and after
                   </p>
                 </>
               ) : (
@@ -123,6 +183,19 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   <h3 className="text-lg font-semibold text-dark-grey mb-3 text-center">
                     Recommendations ({issues.length})
                   </h3>
+
+                  {/* After Image - Unified Container */}
+                  {transformedImageUrl && (
+                    <>
+                      <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={transformedImageUrl}
+                          alt="Improved space with recommendations"
+                          className="w-full h-auto max-h-[400px] object-contain"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* Current Recommendation */}
                   <div className="space-y-4">
@@ -226,13 +299,13 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
       </div>
 
       {/* Next Steps */}
-      <div className="bg-white border-2 border-gray-300 rounded-lg p-4">
+      {/* <div className="bg-white border-2 border-gray-300 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-dark-grey mb-3 text-center">Next Steps</h3>
         <ul className="list-disc list-inside space-y-2 text-sm text-gray-600">
           <li>Review the recommended improvements above</li>
           <li>Consider implementing changes gradually</li>
         </ul>
-      </div>
+      </div> */}
     </div>
   );
 };
