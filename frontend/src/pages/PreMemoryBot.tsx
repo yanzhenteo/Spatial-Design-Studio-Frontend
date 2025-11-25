@@ -11,7 +11,7 @@ interface PreMemoryBotProps {
 
 function PreMemoryBot({ onBack, onContinue }: PreMemoryBotProps) {
   const handleLeftButton = () => {
-    console.log('PreMemoryBot: Not yet clicked - going back to welcome');
+    console.log('PreMemoryBot: Not yet clicked - going back to home');
     onBack();
   };
 

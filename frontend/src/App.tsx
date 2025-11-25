@@ -26,7 +26,7 @@ function App() {
   // Individual page handlers
   const handleLoginSuccess = () => handleNavigate('welcome');
   const handleWelcomeReady = () => handleNavigate('prememorybot');
-  const handleGoBackFromPreMemory = () => handleNavigate('welcome');
+  const handleGoBackFromPreMemory = () => handleNavigate('home');
   const handleContinueFromPreMemory = () => handleNavigate('chat');
   const handleGoBackFromChat = () => handleNavigate('home');
   const handleNextFromChat = () => handleNavigate('postmemorybot');
