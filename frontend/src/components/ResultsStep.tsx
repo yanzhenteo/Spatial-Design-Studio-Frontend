@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import type { AnalysisResults } from '../utils/cameraUtils';
-import BoundingBox from './BoundingBox';
+import BoundingBoxMask from './BoundingBoxMask';
 
 interface ResultsStepProps {
   analysisResults: AnalysisResults | null;
@@ -8,7 +8,8 @@ interface ResultsStepProps {
 }
 
 const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImage }) => {
-  const [currentIssueIndex, setCurrentIssueIndex] = useState(0);
+  // Carousel: -1 = Overall (no mask), 0+ = Individual issues (with mask)
+  const [carouselIndex, setCarouselIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<'comparison' | 'recommendations'>('comparison');
   const [sliderPosition, setSliderPosition] = useState(50); // Percentage (0-100)
   const [comparisonImageDimensions, setComparisonImageDimensions] = useState({ width: 0, height: 0 });
@@ -30,17 +31,33 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
   }
 
   const { issues, transformedImageUrl } = analysisResults;
-  const currentIssue = issues[currentIssueIndex];
+
+  // Get current issue based on carousel index (-1 = Overall, 0+ = specific issue)
+  const isOverallView = carouselIndex === -1;
+  const currentIssue = carouselIndex >= 0 ? issues[carouselIndex] : null;
 
   const handleNext = () => {
-    if (currentIssueIndex < issues.length - 1) {
-      setCurrentIssueIndex(currentIssueIndex + 1);
+    if (carouselIndex < issues.length - 1) {
+      setCarouselIndex(carouselIndex + 1);
     }
   };
 
   const handlePrevious = () => {
-    if (currentIssueIndex > 0) {
-      setCurrentIssueIndex(currentIssueIndex - 1);
+    // In Comparison tab: can go back to -1 (Overall)
+    // In Recommendations tab: can only go to 0 (first issue)
+    const minIndex = activeTab === 'comparison' ? -1 : 0;
+    if (carouselIndex > minIndex) {
+      setCarouselIndex(carouselIndex - 1);
+    }
+  };
+
+  const handleTabSwitch = (tab: 'comparison' | 'recommendations') => {
+    setActiveTab(tab);
+    // Reset carousel to appropriate starting position
+    if (tab === 'comparison') {
+      setCarouselIndex(-1); // Start at Overall view
+    } else {
+      setCarouselIndex(0); // Start at first issue
     }
   };
 
@@ -50,7 +67,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
       <div className="bg-white border-2 border-gray-300 rounded-lg overflow-hidden">
         <div className="flex border-b-2 border-gray-300">
           <button
-            onClick={() => setActiveTab('comparison')}
+            onClick={() => handleTabSwitch('comparison')}
             className={`flex-1 px-4 py-3 text-center font-medium transition-colors ${
               activeTab === 'comparison'
                 ? 'bg-gray-100 text-dark-grey border-b-2 border-dark-grey -mb-[2px]'
@@ -60,7 +77,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
             Comparison
           </button>
           <button
-            onClick={() => setActiveTab('recommendations')}
+            onClick={() => handleTabSwitch('recommendations')}
             className={`flex-1 px-4 py-3 text-center font-medium transition-colors ${
               activeTab === 'recommendations'
                 ? 'bg-gray-100 text-dark-grey border-b-2 border-dark-grey -mb-[2px]'
@@ -111,14 +128,12 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                       />
                     </div>
 
-                    {/* Bounding Boxes for Current Issue */}
-                    {currentIssue?.bounding_box_coordinates && comparisonImageDimensions.width > 0 && (
-                      <BoundingBox
+                    {/* Inverse Mask for Current Issue (only show when not in Overall view) */}
+                    {!isOverallView && currentIssue?.bounding_box_coordinates && comparisonImageDimensions.width > 0 && (
+                      <BoundingBoxMask
                         detections={currentIssue.bounding_box_coordinates.detections}
                         containerWidth={comparisonImageDimensions.width}
                         containerHeight={comparisonImageDimensions.height}
-                        color="#ef4444"
-                        showLabels={false}
                       />
                     )}
 
@@ -194,44 +209,69 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   {/* Issue Information Carousel */}
                   {issues && issues.length > 0 && (
                     <div className="mt-4 bg-white border-2 border-gray-300 rounded-lg p-4">
-                      <h4 className="font-medium text-dark-grey text-center mb-3">
-                        Detected Issue {currentIssueIndex + 1} of {issues.length}
-                      </h4>
+                      {isOverallView ? (
+                        <>
+                          <h4 className="font-medium text-dark-grey text-center mb-3">
+                            Overall Analysis
+                          </h4>
+                          <p className="text-sm text-gray-600 text-center">
+                            {issues.length} issue{issues.length !== 1 ? 's' : ''} detected across the space.
+                            Navigate through the carousel to see individual details.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="font-medium text-dark-grey text-center mb-3">
+                            Detected Issue {carouselIndex + 1} of {issues.length}
+                          </h4>
 
-                      {/* Issue Details */}
-                      <div className="space-y-3">
-                        {currentIssue.item && (
-                          <div>
-                            <span className="font-semibold text-dark-grey">Item: </span>
-                            <span className="text-gray-700">{currentIssue.item}</span>
-                          </div>
-                        )}
+                          {/* Issue Details */}
+                          <div className="space-y-3">
+                            {currentIssue?.item && (
+                              <div>
+                                <span className="font-semibold text-dark-grey">Item: </span>
+                                <span className="text-gray-700">{currentIssue.item}</span>
+                              </div>
+                            )}
 
-                        {currentIssue.recommendation && (
-                          <div>
-                            <span className="font-semibold text-dark-grey">Recommendation: </span>
-                            <span className="text-gray-700">{currentIssue.recommendation}</span>
-                          </div>
-                        )}
+                            {currentIssue?.recommendation && (
+                              <div>
+                                <span className="font-semibold text-dark-grey">Recommendation: </span>
+                                <span className="text-gray-700">{currentIssue.recommendation}</span>
+                              </div>
+                            )}
 
-                        {currentIssue.explanation && (
-                          <div>
-                            <span className="font-semibold text-dark-grey">Explanation: </span>
-                            <span className="text-gray-700">{currentIssue.explanation}</span>
+                            {currentIssue?.explanation && (
+                              <div>
+                                <span className="font-semibold text-dark-grey">Explanation: </span>
+                                <span className="text-gray-700">{currentIssue.explanation}</span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </>
+                      )}
 
                       {/* Navigation Controls */}
                       <div className="flex flex-col items-center space-y-3 mt-4">
-                        {/* Dot Indicators */}
+                        {/* Dot Indicators - Include Overall (-1) as first dot */}
                         <div className="flex space-x-3">
+                          {/* Overall dot */}
+                          <button
+                            onClick={() => setCarouselIndex(-1)}
+                            className={`w-3 h-3 rounded-full transition-colors ${
+                              carouselIndex === -1
+                                ? 'bg-gray-800'
+                                : 'bg-gray-300'
+                            }`}
+                            aria-label="Go to overall view"
+                          />
+                          {/* Individual issue dots */}
                           {issues.map((_, index) => (
                             <button
                               key={index}
-                              onClick={() => setCurrentIssueIndex(index)}
+                              onClick={() => setCarouselIndex(index)}
                               className={`w-3 h-3 rounded-full transition-colors ${
-                                index === currentIssueIndex
+                                index === carouselIndex
                                   ? 'bg-gray-800'
                                   : 'bg-gray-300'
                               }`}
@@ -244,9 +284,9 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                         <div className="flex space-x-4 items-center">
                           <button
                             onClick={handlePrevious}
-                            disabled={currentIssueIndex === 0}
+                            disabled={carouselIndex === -1}
                             className={`p-2 rounded-full transition-colors ${
-                              currentIssueIndex === 0
+                              carouselIndex === -1
                                 ? 'text-gray-400 cursor-not-allowed'
                                 : 'text-dark-grey hover:bg-gray-100'
                             }`}
@@ -257,15 +297,15 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                             </svg>
                           </button>
 
-                          <span className="text-sm text-gray-600 min-w-[80px] text-center">
-                            {currentIssueIndex + 1} / {issues.length}
+                          <span className="text-sm text-gray-600 min-w-20 text-center">
+                            {isOverallView ? 'Overall' : `${carouselIndex + 1} / ${issues.length}`}
                           </span>
 
                           <button
                             onClick={handleNext}
-                            disabled={currentIssueIndex === issues.length - 1}
+                            disabled={carouselIndex === issues.length - 1}
                             className={`p-2 rounded-full transition-colors ${
-                              currentIssueIndex === issues.length - 1
+                              carouselIndex === issues.length - 1
                                 ? 'text-gray-400 cursor-not-allowed'
                                 : 'text-dark-grey hover:bg-gray-100'
                             }`}
@@ -315,14 +355,12 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                           }}
                         />
 
-                        {/* Bounding Boxes for Current Issue */}
+                        {/* Inverse Mask for Current Issue */}
                         {currentIssue?.bounding_box_coordinates && recommendationImageDimensions.width > 0 && (
-                          <BoundingBox
+                          <BoundingBoxMask
                             detections={currentIssue.bounding_box_coordinates.detections}
                             containerWidth={recommendationImageDimensions.width}
                             containerHeight={recommendationImageDimensions.height}
-                            color="#10b981"
-                            showLabels={false}
                           />
                         )}
                       </div>
@@ -337,15 +375,15 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   <div className="space-y-4">
                     {/* Change Number */}
                     <h4 className="font-medium text-dark-grey text-center">
-                      Change {currentIssueIndex + 1}
+                      Change {carouselIndex + 1}
                     </h4>
 
                     {/* Recommendation Description */}
                     <div className="text-center">
                       <h5 className="font-semibold text-dark-grey mb-2">
-                        {currentIssue.element}
+                        {currentIssue?.element}
                       </h5>
-                      <p className="text-sm text-gray-700 mb-4">{currentIssue.recommendation}</p>
+                      <p className="text-sm text-gray-700 mb-4">{currentIssue?.recommendation}</p>
 
                       {/* Grey Divider Line */}
                       <div className="border-t-2 border-gray-300 my-4"></div>
@@ -368,9 +406,9 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                         {issues.map((_, index) => (
                           <button
                             key={index}
-                            onClick={() => setCurrentIssueIndex(index)}
+                            onClick={() => setCarouselIndex(index)}
                             className={`w-3 h-3 rounded-full transition-colors ${
-                              index === currentIssueIndex
+                              index === carouselIndex
                                 ? 'bg-gray-800'
                                 : 'bg-gray-300'
                             }`}
@@ -383,9 +421,9 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                       <div className="flex space-x-4 items-center">
                         <button
                           onClick={handlePrevious}
-                          disabled={currentIssueIndex === 0}
+                          disabled={carouselIndex <= 0}
                           className={`p-2 rounded-full transition-colors ${
-                            currentIssueIndex === 0
+                            carouselIndex <= 0
                               ? 'text-gray-400 cursor-not-allowed'
                               : 'text-dark-grey hover:bg-gray-100'
                           }`}
@@ -396,15 +434,15 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                           </svg>
                         </button>
 
-                        <span className="text-sm text-gray-600 min-w-[80px] text-center">
-                          {currentIssueIndex + 1} / {issues.length}
+                        <span className="text-sm text-gray-600 min-w-20 text-center">
+                          {carouselIndex + 1} / {issues.length}
                         </span>
 
                         <button
                           onClick={handleNext}
-                          disabled={currentIssueIndex === issues.length - 1}
+                          disabled={carouselIndex >= issues.length - 1}
                           className={`p-2 rounded-full transition-colors ${
-                            currentIssueIndex === issues.length - 1
+                            carouselIndex >= issues.length - 1
                               ? 'text-gray-400 cursor-not-allowed'
                               : 'text-dark-grey hover:bg-gray-100'
                           }`}
