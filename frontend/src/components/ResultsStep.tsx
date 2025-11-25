@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { AnalysisResults } from '../utils/cameraUtils';
+import BoundingBox from './BoundingBox';
 
 interface ResultsStepProps {
   analysisResults: AnalysisResults | null;
@@ -10,6 +11,11 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
   const [currentIssueIndex, setCurrentIssueIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'comparison' | 'recommendations'>('comparison');
   const [sliderPosition, setSliderPosition] = useState(50); // Percentage (0-100)
+  const [comparisonImageDimensions, setComparisonImageDimensions] = useState({ width: 0, height: 0 });
+  const [recommendationImageDimensions, setRecommendationImageDimensions] = useState({ width: 0, height: 0 });
+
+  const comparisonImageRef = useRef<HTMLImageElement>(null);
+  const recommendationImageRef = useRef<HTMLImageElement>(null);
 
   if (!analysisResults) {
     return (
@@ -80,9 +86,17 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden">
                     {/* Before Image (Full Background) - This sets the container height */}
                     <img
+                      ref={comparisonImageRef}
                       src={originalImage}
                       alt="Original space before improvements"
                       className="w-full h-auto max-h-[400px] object-contain pointer-events-none select-none"
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        setComparisonImageDimensions({
+                          width: img.clientWidth,
+                          height: img.clientHeight
+                        });
+                      }}
                     />
 
                     {/* After Image (Clipped by slider) - Absolute positioned overlay */}
@@ -96,6 +110,17 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                         className="w-full h-auto max-h-[400px] object-contain select-none"
                       />
                     </div>
+
+                    {/* Bounding Boxes for Current Issue */}
+                    {currentIssue?.bounding_box_coordinates && comparisonImageDimensions.width > 0 && (
+                      <BoundingBox
+                        detections={currentIssue.bounding_box_coordinates.detections}
+                        containerWidth={comparisonImageDimensions.width}
+                        containerHeight={comparisonImageDimensions.height}
+                        color="#ef4444"
+                        showLabels={false}
+                      />
+                    )}
 
                     {/* Slider Handle */}
                     <div
@@ -133,7 +158,6 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                         document.addEventListener('mouseup', handleMouseUp);
                       }}
                       onTouchStart={(e) => {
-                        e.preventDefault();
                         const container = e.currentTarget;
                         const rect = container.getBoundingClientRect();
 
@@ -166,6 +190,95 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   <p className="text-sm text-gray-600 mt-1 text-center">
                     Drag the slider to compare before and after
                   </p>
+
+                  {/* Issue Information Carousel */}
+                  {issues && issues.length > 0 && (
+                    <div className="mt-4 bg-white border-2 border-gray-300 rounded-lg p-4">
+                      <h4 className="font-medium text-dark-grey text-center mb-3">
+                        Detected Issue {currentIssueIndex + 1} of {issues.length}
+                      </h4>
+
+                      {/* Issue Details */}
+                      <div className="space-y-3">
+                        {currentIssue.item && (
+                          <div>
+                            <span className="font-semibold text-dark-grey">Item: </span>
+                            <span className="text-gray-700">{currentIssue.item}</span>
+                          </div>
+                        )}
+
+                        {currentIssue.recommendation && (
+                          <div>
+                            <span className="font-semibold text-dark-grey">Recommendation: </span>
+                            <span className="text-gray-700">{currentIssue.recommendation}</span>
+                          </div>
+                        )}
+
+                        {currentIssue.explanation && (
+                          <div>
+                            <span className="font-semibold text-dark-grey">Explanation: </span>
+                            <span className="text-gray-700">{currentIssue.explanation}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Navigation Controls */}
+                      <div className="flex flex-col items-center space-y-3 mt-4">
+                        {/* Dot Indicators */}
+                        <div className="flex space-x-3">
+                          {issues.map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setCurrentIssueIndex(index)}
+                              className={`w-3 h-3 rounded-full transition-colors ${
+                                index === currentIssueIndex
+                                  ? 'bg-gray-800'
+                                  : 'bg-gray-300'
+                              }`}
+                              aria-label={`Go to issue ${index + 1}`}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Previous/Next Buttons */}
+                        <div className="flex space-x-4 items-center">
+                          <button
+                            onClick={handlePrevious}
+                            disabled={currentIssueIndex === 0}
+                            className={`p-2 rounded-full transition-colors ${
+                              currentIssueIndex === 0
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-dark-grey hover:bg-gray-100'
+                            }`}
+                            aria-label="Previous issue"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+
+                          <span className="text-sm text-gray-600 min-w-[80px] text-center">
+                            {currentIssueIndex + 1} / {issues.length}
+                          </span>
+
+                          <button
+                            onClick={handleNext}
+                            disabled={currentIssueIndex === issues.length - 1}
+                            className={`p-2 rounded-full transition-colors ${
+                              currentIssueIndex === issues.length - 1
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : 'text-dark-grey hover:bg-gray-100'
+                            }`}
+                            aria-label="Next issue"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-center text-gray-500">No images available for comparison</p>
@@ -189,10 +302,33 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                     <>
                       <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden">
                         <img
+                          ref={recommendationImageRef}
                           src={transformedImageUrl}
                           alt="Improved space with recommendations"
                           className="w-full h-auto max-h-[400px] object-contain"
+                          onLoad={(e) => {
+                            const img = e.currentTarget;
+                            setRecommendationImageDimensions({
+                              width: img.clientWidth,
+                              height: img.clientHeight
+                            });
+                          }}
                         />
+
+                        {/* Bounding Boxes for Current Issue */}
+                        {currentIssue?.bounding_box_coordinates && recommendationImageDimensions.width > 0 && (
+                          <BoundingBox
+                            detections={currentIssue.bounding_box_coordinates.detections}
+                            containerWidth={recommendationImageDimensions.width}
+                            containerHeight={recommendationImageDimensions.height}
+                            color="#10b981"
+                            showLabels={false}
+                          />
+                        )}
+                      </div>
+                      {/* After label below image */}
+                      <div className="flex justify-end mt-2 px-2">
+                        <span className="bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">After</span>
                       </div>
                     </>
                   )}

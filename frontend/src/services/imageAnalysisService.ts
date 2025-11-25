@@ -6,10 +6,29 @@
  * - /image-gen-api -> Picture Generation service (port 8002)
  */
 
+export interface BoundingBoxDetection {
+  label: string;
+  bbox: number[]; // [x_min, y_min, x_max, y_max] normalized (0-1)
+  center: number[]; // [x, y] normalized (0-1)
+  confidence: number;
+}
+
+export interface BoundingBoxCoordinates {
+  format: string;
+  detections: BoundingBoxDetection[];
+  count: number;
+}
+
 export interface Issue {
   element: string;
   recommendation: string;
   prompt?: string;
+  item?: string;
+  category?: string;
+  issue?: string;
+  guideline_reference?: string;
+  explanation?: string;
+  bounding_box_coordinates?: BoundingBoxCoordinates;
 }
 
 export interface AnalysisResult {
@@ -24,6 +43,16 @@ export interface AnalysisResult {
 export interface TransformResult {
   success: boolean;
   transformed_image_path: string | null;
+  error?: string;
+}
+
+export interface DetectionResult {
+  success: boolean;
+  analysis_with_boxes: {
+    issues: Issue[];
+  } | null;
+  detected_count?: number;
+  processing_time?: number;
   error?: string;
 }
 
@@ -79,6 +108,29 @@ export async function transformImage(
 }
 
 /**
+ * Add bounding box coordinates to analysis JSON using detection service
+ */
+export async function addBoundingBoxes(
+  imageBlob: Blob,
+  analysisJson: { issues: Issue[] }
+): Promise<DetectionResult> {
+  const formData = new FormData();
+  formData.append('file', imageBlob, 'original-image.jpg');
+  formData.append('analysis_json', JSON.stringify(analysisJson));
+
+  const response = await fetch('/detection-api/identify', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Detection API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+/**
  * Download transformed image from the API
  */
 export async function downloadTransformedImage(
@@ -128,19 +180,34 @@ export async function analyzeAndTransformImage(
 
     const issues = analysisResult.analysis_json.issues || [];
 
-    // Step 2: Transform the image
-    console.log(`Step 2: Transforming image (${issues.length} issues)...`);
-    console.log('This may take several minutes...');
+    // Step 2: Run detection and transformation in parallel
+    console.log(`Step 2: Running detection and transformation in parallel (${issues.length} issues)...`);
+    console.log('Detection: Adding bounding boxes to issues...');
+    console.log('Transformation: Generating improved image (this may take several minutes)...');
 
-    const transformResult = await transformImage(imageBlob, {
-      issues: issues,
-    });
+    const [detectionResult, transformResult] = await Promise.all([
+      // Step 2a: Add bounding boxes using detection service
+      addBoundingBoxes(imageBlob, { issues: issues }),
 
+      // Step 2b: Transform the image
+      transformImage(imageBlob, { issues: issues })
+    ]);
+
+    // Check detection result
+    if (!detectionResult.success) {
+      console.warn('Detection failed, continuing with original issues:', detectionResult.error);
+    } else {
+      console.log(`Detection complete! Found ${detectionResult.detected_count} total detections`);
+    }
+
+    // Check transformation result
     if (!transformResult.success || !transformResult.transformed_image_path) {
       return {
         success: false,
         analysisText: analysisResult.analysis_text,
-        issues: issues,
+        issues: detectionResult.success && detectionResult.analysis_with_boxes
+          ? detectionResult.analysis_with_boxes.issues
+          : issues,
         transformedImageUrl: null,
         error: transformResult.error || 'Transformation failed',
       };
@@ -152,10 +219,15 @@ export async function analyzeAndTransformImage(
       transformResult.transformed_image_path
     );
 
+    // Use enhanced issues with bounding boxes if detection succeeded
+    const finalIssues = detectionResult.success && detectionResult.analysis_with_boxes
+      ? detectionResult.analysis_with_boxes.issues
+      : issues;
+
     return {
       success: true,
       analysisText: analysisResult.analysis_text,
-      issues: issues,
+      issues: finalIssues,
       transformedImageUrl: transformedImageUrl,
     };
   } catch (error) {

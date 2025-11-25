@@ -57,6 +57,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/image-gen-api/, ''),
       },
+      // Proxy for Detection service (bounding box identification)
+      '/detection-api': {
+        target: 'http://127.0.0.1:8004',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/detection-api/, ''),
+      },
       // WebSocket proxy for verbose service
       '/ws-verbose': {
         target: 'ws://127.0.0.1:8003',
