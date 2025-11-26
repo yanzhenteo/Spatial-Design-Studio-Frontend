@@ -24,7 +24,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
 
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % shuffledData.length);
-    }, 40000); // 40 seconds
+    }, 25000); // 25 seconds
 
     return () => clearInterval(interval);
   }, [shuffledData.length]);
