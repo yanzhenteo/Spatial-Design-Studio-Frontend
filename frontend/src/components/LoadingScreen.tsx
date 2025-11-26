@@ -18,7 +18,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
     setShuffledData(getShuffledDementiaData());
   }, []);
 
-  // Auto-rotate carousel every 40 seconds
+  // Auto-rotate carousel every 25 seconds
   useEffect(() => {
     if (shuffledData.length === 0) return;
 

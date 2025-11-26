@@ -4,7 +4,11 @@
  * Handles communication with backend APIs through Vite proxy:
  * - /rag-api -> RAG-Langchain service (port 8001)
  * - /image-gen-api -> Picture Generation service (port 8002)
+ * - /detection-api -> Detection service (port 8004)
+ * - /product-search-api -> Product Search service (port 8005)
  */
+
+import { batchSearchProductSellers } from './searchService';
 
 export interface BoundingBoxDetection {
   label: string;
@@ -29,6 +33,9 @@ export interface Issue {
   guideline_reference?: string;
   explanation?: string;
   bounding_box_coordinates?: BoundingBoxCoordinates;
+  'Website name'?: string[];
+  'Website link'?: string[];
+  'Search query used'?: string;
 }
 
 export interface AnalysisResult {
@@ -180,17 +187,24 @@ export async function analyzeAndTransformImage(
 
     const issues = analysisResult.analysis_json.issues || [];
 
-    // Step 2: Run detection and transformation in parallel
-    console.log(`Step 2: Running detection and transformation in parallel (${issues.length} issues)...`);
+    // Step 2: Run detection, transformation, and product search in parallel
+    console.log(`Step 2: Running detection, transformation, and product search in parallel (${issues.length} issues)...`);
     console.log('Detection: Adding bounding boxes to issues...');
     console.log('Transformation: Generating improved image (this may take several minutes)...');
+    console.log('Product Search: Finding sellers for recommended products...');
 
-    const [detectionResult, transformResult] = await Promise.all([
+    const [detectionResult, transformResult, searchResult] = await Promise.all([
       // Step 2a: Add bounding boxes using detection service
       addBoundingBoxes(imageBlob, { issues: issues }),
 
       // Step 2b: Transform the image
-      transformImage(imageBlob, { issues: issues })
+      transformImage(imageBlob, { issues: issues }),
+
+      // Step 2c: Search for product sellers (runs in parallel)
+      batchSearchProductSellers(issues, 'Singapore', 5).catch(error => {
+        console.warn('Product search failed, continuing without links:', error);
+        return { total_issues: issues.length, processed: 0, results: issues };
+      })
     ]);
 
     // Check detection result
@@ -198,6 +212,13 @@ export async function analyzeAndTransformImage(
       console.warn('Detection failed, continuing with original issues:', detectionResult.error);
     } else {
       console.log(`Detection complete! Found ${detectionResult.detected_count} total detections`);
+    }
+
+    // Check product search result
+    if (searchResult.processed > 0) {
+      console.log(`Product search complete! Found sellers for ${searchResult.processed}/${searchResult.total_issues} items`);
+    } else {
+      console.warn('Product search did not find any sellers');
     }
 
     // Check transformation result
@@ -219,10 +240,29 @@ export async function analyzeAndTransformImage(
       transformResult.transformed_image_path
     );
 
-    // Use enhanced issues with bounding boxes if detection succeeded
-    const finalIssues = detectionResult.success && detectionResult.analysis_with_boxes
+    // Step 4: Merge all results (detection + product search)
+    console.log('Step 4: Merging detection and product search results...');
+
+    // Start with issues from detection (if successful) or original issues
+    let finalIssues = detectionResult.success && detectionResult.analysis_with_boxes
       ? detectionResult.analysis_with_boxes.issues
       : issues;
+
+    // Merge product search results into final issues
+    if (searchResult.results && searchResult.results.length > 0) {
+      finalIssues = finalIssues.map((issue, index) => {
+        const searchIssue = searchResult.results[index];
+        if (searchIssue && searchIssue['Website name'] && searchIssue['Website link']) {
+          return {
+            ...issue,
+            'Website name': searchIssue['Website name'],
+            'Website link': searchIssue['Website link'],
+            'Search query used': searchIssue['Search query used']
+          };
+        }
+        return issue;
+      });
+    }
 
     return {
       success: true,

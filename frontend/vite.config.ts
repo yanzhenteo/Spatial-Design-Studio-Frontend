@@ -63,6 +63,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/detection-api/, ''),
       },
+      // Proxy for Product Search service (intelligent product search)
+      '/product-search-api': {
+        target: 'http://127.0.0.1:8005',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/product-search-api/, ''),
+      },
       // WebSocket proxy for verbose service
       '/ws-verbose': {
         target: 'ws://127.0.0.1:8003',

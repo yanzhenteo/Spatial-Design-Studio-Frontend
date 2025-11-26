@@ -390,13 +390,44 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
 
                       {/* Product Recommendations Section */}
                       <h4 className="font-medium text-dark-grey mb-2">
-                        Product Recommendations
+                        Where to Buy
                       </h4>
-                      <p className="text-sm text-gray-700">
-                        <span className="text-blue-600 underline cursor-not-allowed">
-                          View recommended products for this change
-                        </span>
-                      </p>
+
+                      {/* Display product seller links if available */}
+                      {currentIssue?.['Website link'] && currentIssue?.['Website name'] &&
+                       currentIssue['Website link'].length > 0 ? (
+                        <div className="space-y-2">
+                          {currentIssue['Search query used'] && (
+                            <p className="text-xs text-gray-500 italic">
+                              Searched for: {currentIssue['Search query used']}
+                            </p>
+                          )}
+                          <div className="space-y-2">
+                            {currentIssue['Website link'].map((link, idx) => (
+                              <div key={idx} className="flex items-center justify-center">
+                                <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 underline text-sm flex items-center gap-1"
+                                >
+                                  {currentIssue['Website name']?.[idx] || `Seller ${idx + 1}`}
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Found {currentIssue['Website link'].length} seller{currentIssue['Website link'].length !== 1 ? 's' : ''} in Singapore
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">
+                          No purchase needed or sellers not found for this recommendation
+                        </p>
+                      )}
                     </div>
 
                     {/* Navigation Controls */}
