@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { AnalysisResults } from '../utils/cameraUtils';
 import BoundingBoxMask from './BoundingBoxMask';
+import LinkPreviewCard from './LinkPreviewCard';
 
 interface ResultsStepProps {
   analysisResults: AnalysisResults | null;
@@ -371,119 +372,114 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                     </>
                   )}
 
-                  {/* Current Recommendation */}
+                  {/* Current Recommendation - Compact Header */}
                   <div className="space-y-4">
-                    {/* Change Number */}
-                    <h4 className="font-medium text-dark-grey text-center">
-                      Change {carouselIndex + 1}
-                    </h4>
-
-                    {/* Recommendation Description */}
-                    <div className="text-center">
-                      <h5 className="font-semibold text-dark-grey mb-2">
-                        {currentIssue?.element}
-                      </h5>
-                      <p className="text-sm text-gray-700 mb-4">{currentIssue?.recommendation}</p>
-
-                      {/* Grey Divider Line */}
-                      <div className="border-t-2 border-gray-300 my-4"></div>
-
-                      {/* Product Recommendations Section */}
-                      <h4 className="font-medium text-dark-grey mb-2">
-                        Where to Buy
-                      </h4>
-
-                      {/* Display product seller links if available */}
-                      {currentIssue?.['Website link'] && currentIssue?.['Website name'] &&
-                       currentIssue['Website link'].length > 0 ? (
-                        <div className="space-y-2">
-                          {currentIssue['Search query used'] && (
-                            <p className="text-xs text-gray-500 italic">
-                              Searched for: {currentIssue['Search query used']}
-                            </p>
-                          )}
-                          <div className="space-y-2">
-                            {currentIssue['Website link'].map((link, idx) => (
-                              <div key={idx} className="flex items-center justify-center">
-                                <a
-                                  href={link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-800 underline text-sm flex items-center gap-1"
-                                >
-                                  {currentIssue['Website name']?.[idx] || `Seller ${idx + 1}`}
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </a>
-                              </div>
-                            ))}
+                    {/* Recommendation Header (Compact) */}
+                    <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium text-gray-500">Change {carouselIndex + 1} of {issues.length}</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-2">
-                            Found {currentIssue['Website link'].length} seller{currentIssue['Website link'].length !== 1 ? 's' : ''} in Singapore
-                          </p>
+                          <h5 className="font-semibold text-dark-grey text-sm mb-1">
+                            {currentIssue?.element}
+                          </h5>
+                          <p className="text-xs text-gray-600 line-clamp-2">{currentIssue?.recommendation}</p>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">
-                          No purchase needed or sellers not found for this recommendation
-                        </p>
-                      )}
-                    </div>
 
-                    {/* Navigation Controls */}
-                    <div className="flex flex-col items-center space-y-3">
-                      {/* Dot Indicators */}
-                      <div className="flex space-x-3">
+                        {/* Navigation arrows inline */}
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            onClick={handlePrevious}
+                            disabled={carouselIndex <= 0}
+                            className={`p-1.5 rounded-full transition-colors ${
+                              carouselIndex <= 0
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-dark-grey hover:bg-gray-200'
+                            }`}
+                            aria-label="Previous recommendation"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={handleNext}
+                            disabled={carouselIndex >= issues.length - 1}
+                            className={`p-1.5 rounded-full transition-colors ${
+                              carouselIndex >= issues.length - 1
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-dark-grey hover:bg-gray-200'
+                            }`}
+                            aria-label="Next recommendation"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dot indicators */}
+                      <div className="flex justify-center space-x-2 mt-3">
                         {issues.map((_, index) => (
                           <button
                             key={index}
                             onClick={() => setCarouselIndex(index)}
-                            className={`w-3 h-3 rounded-full transition-colors ${
+                            className={`w-2 h-2 rounded-full transition-all ${
                               index === carouselIndex
-                                ? 'bg-gray-800'
-                                : 'bg-gray-300'
+                                ? 'bg-gray-800 w-6'
+                                : 'bg-gray-300 hover:bg-gray-400'
                             }`}
                             aria-label={`Go to recommendation ${index + 1}`}
                           />
                         ))}
                       </div>
+                    </div>
 
-                      {/* Previous/Next Buttons */}
-                      <div className="flex space-x-4 items-center">
-                        <button
-                          onClick={handlePrevious}
-                          disabled={carouselIndex <= 0}
-                          className={`p-2 rounded-full transition-colors ${
-                            carouselIndex <= 0
-                              ? 'text-gray-400 cursor-not-allowed'
-                              : 'text-dark-grey hover:bg-gray-100'
-                          }`}
-                          aria-label="Previous recommendation"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    {/* Where to Buy Section - Scrollable Cards */}
+                    <div>
+                      <h4 className="font-semibold text-dark-grey mb-3 text-center">
+                        Where to Buy
+                      </h4>
+
+                      {currentIssue?.['Website link'] && currentIssue?.['Website name'] &&
+                       currentIssue['Website link'].length > 0 ? (
+                        <div className="space-y-3">
+                          {/* Search query info */}
+                          {/* {currentIssue['Search query used'] && (
+                            <p className="text-xs text-center text-gray-500 italic">
+                              Searched for: "{currentIssue['Search query used']}"
+                            </p>
+                          )} */}
+
+                          {/* Scrollable card container */}
+                          <div className="max-h-[400px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                            {currentIssue['Website link'].map((link, idx) => (
+                              <LinkPreviewCard
+                                key={idx}
+                                url={link}
+                                websiteName={currentIssue['Website name']?.[idx] || `Seller ${idx + 1}`}
+                                index={idx}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Seller count */}
+                          <p className="text-xs text-center text-gray-500 mt-2">
+                            Found {currentIssue['Website link'].length} seller{currentIssue['Website link'].length !== 1 ? 's' : ''} in Singapore
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                           </svg>
-                        </button>
-
-                        <span className="text-sm text-gray-600 min-w-20 text-center">
-                          {carouselIndex + 1} / {issues.length}
-                        </span>
-
-                        <button
-                          onClick={handleNext}
-                          disabled={carouselIndex >= issues.length - 1}
-                          className={`p-2 rounded-full transition-colors ${
-                            carouselIndex >= issues.length - 1
-                              ? 'text-gray-400 cursor-not-allowed'
-                              : 'text-dark-grey hover:bg-gray-100'
-                          }`}
-                          aria-label="Next recommendation"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </div>
+                          <p className="text-sm text-gray-500">
+                            No purchase needed or sellers not found
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
