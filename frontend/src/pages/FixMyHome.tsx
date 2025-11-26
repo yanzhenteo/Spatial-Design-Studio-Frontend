@@ -10,6 +10,7 @@ import IssueSelectionStep, { ALL_ISSUES } from '../components/IssueSelectionStep
 import CommentsStep from '../components/CommentsStep';
 import StepNavigation from '../components/StepNavigation';
 import Button from '../components/Button';
+import LoadingScreen from '../components/LoadingScreen';
 import { fetchIssuesFromLastConversation } from '../services/conversationIssueService';
 import type { AnalysisResults } from '../utils/cameraUtils';
 
@@ -197,14 +198,20 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
   const currentConfig = stepConfigs[currentStep];
 
   return (
-    <motion.div
-      key="fixmyhome-page"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.6, ease: "easeInOut" }}
-      className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center p-6"
-    >
+    <>
+      {/* Full-screen Loading Overlay - show when processing image */}
+      {isProcessingImage && (
+        <LoadingScreen message="Analyzing your space and generating recommendations..." />
+      )}
+
+      <motion.div
+        key="fixmyhome-page"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.6, ease: "easeInOut" }}
+        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center p-6"
+      >
       {/* Back Button Component */}
       <BackButton onBack={onBack} />
 
@@ -261,20 +268,6 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 />
               )}
 
-              {/* Loading screen - show between step3 and step4 */}
-              {currentStep === 'step3' && isProcessingImage && (
-                <div className="w-full mb-6 space-y-4">
-                  <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col items-center justify-center min-h-[300px]">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red mb-4"></div>
-                    <p className="text-big-text text-dark-grey text-center">
-                      Processing your image...
-                    </p>
-                    <p className="text-sm text-gray-600 text-center mt-2">
-                      This may take several minutes
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {/* Results content - only show on step4 */}
               {currentStep === 'step4' && (
@@ -328,6 +321,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
         </AnimatePresence>
       </div>
     </motion.div>
+    </>
   );
 }
 
