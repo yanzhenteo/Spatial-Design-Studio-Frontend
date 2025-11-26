@@ -23,7 +23,7 @@ export const dementiaData: DementiaFactOrMyth[] = [
     id: 1,
     statement: "Dementia is a disease.",
     isFact: false,
-    explanation: "Dementia is not a disease, but general term for decline in thinking and memory skills that interferes with daily activities. Alzheimer's disease is a cause of dementia."
+    explanation: "Dementia is not a disease, but general term for decline in thinking and memory skills that interferes with daily activities. Alzheimer's disease is one of the causes of dementia."
   },
   {
     id: 2,
@@ -59,7 +59,7 @@ export const dementiaData: DementiaFactOrMyth[] = [
     id: 7,
     statement: "Dementia can affect younger people.",
     isFact: true,
-    explanation: "While people over 65 are most likely to get dementia, it can affect younger people, too, even children. When this happens, it's known as young onset dementia."
+    explanation: "While people over 65 are most likely to get dementia, it can affect younger people, too, even children. When this happens, it's known as early onset dementia."
   },
   {
     id: 8,
