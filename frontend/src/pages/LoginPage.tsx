@@ -57,7 +57,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       <AnimatedWaveBackground />
       
       {/* Login Form with Logo */}
-      <div className="relative z-10 w-full flex items-center justify-center min-h-screen">
+      <div className="relative z-10 w-full flex items-center justify-center min-h-screen px-4 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
           {!isLoggingIn ? (
             <motion.div
@@ -69,19 +69,19 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 scale: 0.8,
                 transition: { duration: 1.5, ease: "easeInOut" }
               }}
-              className="flex flex-col items-center w-full max-w-sm px-6"
+              className="flex flex-col items-center w-full max-w-sm sm:max-w-md px-4 sm:px-6"
             >
               {/* Logo */}
               <motion.div
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="mb-8"
+                className="mb-6 sm:mb-8"
               >
                 <img 
                   src="/logo.png"
                   alt="App Logo" 
-                  className="w-45 h-45 object-contain"
+                  className="w-32 h-32 sm:w-40 sm:h-40 md:w-45 md:h-45 object-contain"
                 />
               </motion.div>
 

@@ -21,22 +21,26 @@ function WelcomePage({ onGetStarted }: WelcomePageProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6 }}
-      className="min-h-screen bg-gradient-pink-to-purple flex flex-col items-center justify-center p-6 space-y-6"
+      className="min-h-screen bg-gradient-pink-to-purple flex flex-col items-center justify-center p-4 sm:p-6 space-y-4 sm:space-y-6"
     >
       {/* Header Card */}
       <HeaderCard>
-        <h1 className="text-header text-dark-grey">Hello there!</h1>
+        <h1 className="text-header text-dark-grey text-center px-2 sm:px-0">
+          Hello there!
+        </h1>
       </HeaderCard>
 
       {/* Content Card */}
       <ContentCard>
-        <p className="text-big-text text-dark-grey text-center">
+        <p className="text-big-text text-dark-grey text-center px-2 sm:px-0 mb-4 sm:mb-6">
           I will be here to assist you in making your space more dementia-friendly and memory-supportive via customized space solutions.
         </p>
         
-        <Button onClick={handleGetStarted}>
-          I'm ready!
-        </Button>
+        <div className="w-full max-w-xs sm:max-w-sm mx-auto">
+          <Button onClick={handleGetStarted}>
+            I'm ready!
+          </Button>
+        </div>
       </ContentCard>
     </motion.div>
   );

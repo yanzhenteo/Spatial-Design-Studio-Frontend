@@ -210,13 +210,15 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center p-6"
+        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center pt-16 pb-6 px-4 sm:pt-20 sm:pb-8 sm:px-6"
       >
-      {/* Back Button Component */}
-      <BackButton onBack={onBack} />
+      {/* Back Button Component - Centered and properly spaced */}
+      <div className="w-full max-w-md mb-4 sm:mb-6">
+        <BackButton onBack={onBack} />
+      </div>
 
       {/* Animated Card Container - Centered content */}
-      <div className="w-full max-w-md flex-1 flex flex-col justify-center">
+      <div className="w-full max-w-md flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
@@ -224,23 +226,28 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.4 }}
+            className="w-full flex flex-col items-center"
           >
             {/* Header Card */}
-            <HeaderCard className="mb-6">
-              <h1 className="text-header text-dark-grey mb-2">{currentConfig.header}</h1>
-              {/* Symptom descriptions - only show on step2 */}
-              {currentStep === 'step2' && (
-                <p className="text-big-text text-dark-grey opacity-80">
-                  {currentConfig.symptomDescriptions}
-                </p>
-              )}
+            <HeaderCard className="mb-4 sm:mb-6 w-full">
+              <div className="text-center">
+                <h1 className="text-header text-dark-grey mb-2">
+                  {currentConfig.header}
+                </h1>
+                {/* Symptom descriptions - only show on step2 */}
+                {currentStep === 'step2' && (
+                  <p className="text-big-text text-dark-grey opacity-80">
+                    {currentConfig.symptomDescriptions}
+                  </p>
+                )}
+              </div>
             </HeaderCard>
 
             {/* Content Card */}
-            <ContentCard>
+            <ContentCard className="w-full">
               {/* Content text - show for all steps */}
               {currentConfig.content && (
-                <p className="text-big-text text-dark-grey text-center mb-6">
+                <p className="text-big-text text-dark-grey text-center mb-4 sm:mb-6 px-2 sm:px-0">
                   {currentConfig.content}
                 </p>
               )}
@@ -290,7 +297,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
               {currentStep !== 'step4' && (
                 <StepIndicator 
                   currentStep={currentStep} 
-                  className="mb-6" 
+                  className="mb-4 sm:mb-6" 
                 />
               )}
 
@@ -312,7 +319,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
               <Button
                 variant="outline-light"
                 onClick={handleBack}
-                className="mt-6"
+                className="mt-4 sm:mt-6 w-full max-w-xs"
               >
                 Back
               </Button>

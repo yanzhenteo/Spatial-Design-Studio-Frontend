@@ -27,16 +27,18 @@ function PostMemoryBot({ onBack, onContinue }: PostMemoryBotProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.6, ease: "easeInOut" }}
-      className="min-h-screen bg-gradient-purple-to-blue flex flex-col items-center justify-center p-6 space-y-6"
+      className="min-h-screen bg-gradient-purple-to-blue flex flex-col items-center justify-center p-4 sm:p-6 space-y-4 sm:space-y-6"
     >
       {/* Header Card */}
       <HeaderCard>
-        <h1 className="text-header text-dark-grey">Great job!</h1>
+        <h1 className="text-header text-dark-grey text-center">
+          Great job!
+        </h1>
       </HeaderCard>
 
       {/* Content Card */}
       <ContentCard>
-        <p className="text-big-text text-dark-grey text-center">
+        <p className="text-big-text text-dark-grey text-center mb-4 sm:mb-6 px-2 sm:px-0">
           Mei Ling now better understands your situation, and she will be helping us create personalized solutions to your problems.
         </p>
         

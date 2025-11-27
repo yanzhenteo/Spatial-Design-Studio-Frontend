@@ -268,29 +268,29 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       className="min-h-screen bg-gradient-lightpurple-to-lightblue flex flex-col"
     >
       {/* Fixed Header */}
-      <div className="bg-white shadow-sm p-4 flex items-center justify-between fixed top-0 left-0 right-0 z-10">
+      <div className="bg-white shadow-sm p-3 sm:p-4 flex items-center justify-between fixed top-0 left-0 right-0 z-10">
         {/* Back Button */}
         <button
           onClick={onBack}
-          className="text-muted-purple text-button-text flex items-center gap-2"
+          className="text-muted-purple text-button-text flex items-center gap-1 sm:gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back
+          <span className="hidden xs:inline">Back</span>
         </button>
 
         {/* Title */}
-        <h1 className="text-header text-dark-grey">Memory Bot</h1>
+        <h1 className="text-header text-dark-grey text-sm sm:text-base">Memory Bot</h1>
 
         {/* Next Button - Only visible during Phase 1 or after Phase 4 */}
         {(phase1Complete && !phase4Complete) && (
           <button
             onClick={saveConversation}
             disabled={isSubmitting}
-            className="text-button-text flex items-center gap-2 transition-opacity text-muted-purple disabled:opacity-50"
+            className="text-button-text flex items-center gap-1 sm:gap-2 transition-opacity text-muted-purple disabled:opacity-50"
           >
-            {isSubmitting ? 'Saving...' : 'Next'}
+            <span className="text-xs sm:text-sm">{isSubmitting ? 'Saving...' : 'Next'}</span>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -298,12 +298,12 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         )}
         {/* Invisible placeholder to maintain layout when button is hidden */}
         {(!phase1Complete || phase4Complete) && (
-          <div className="w-12 h-4" />
+          <div className="w-8 sm:w-12 h-4" />
         )}
       </div>
 
       {/* Scrollable Messages Area */}
-      <div className="flex-1 overflow-y-auto pt-16 pb-24 px-4">
+      <div className="flex-1 overflow-y-auto pt-16 sm:pt-20 pb-24 sm:pb-28 px-3 sm:px-4">
         {messages.map((message, index) => {
           if (message.type === 'questionnaire' && message.questionnaire) {
             return (
@@ -379,16 +379,16 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
           if (isCompletionMessage) {
             return (
               <div key={message.id} className="flex justify-start mb-4">
-                <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-6 max-w-[70%] space-y-4">
+                <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-4 sm:p-6 max-w-[85%] sm:max-w-[70%] space-y-3 sm:space-y-4">
                   <p className="text-big-text">{message.text}</p>
                   <p className="text-fill-text text-dark-grey opacity-70 mt-1">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <div className="pt-4">
+                  <div className="pt-3 sm:pt-4">
                     <button
                       onClick={saveConversation}
                       disabled={isSubmitting}
-                      className="w-full bg-orange-400 text-white text-button-text font-semibold py-3 px-6 rounded-full hover:bg-orange-500 transition-colors duration-200 disabled:opacity-50"
+                      className="w-full bg-orange-400 text-white text-button-text font-semibold py-2 sm:py-3 px-4 sm:px-6 rounded-full hover:bg-orange-500 transition-colors duration-200 disabled:opacity-50 text-sm sm:text-base"
                     >
                       {isSubmitting ? 'Saving...' : 'Next'}
                     </button>
@@ -411,7 +411,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         
         {isLoading && (
           <div className="flex justify-start mb-4">
-            <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-4 max-w-[70%]">
+            <div className="bg-light-yellow text-dark-grey rounded-2xl rounded-bl-none p-3 sm:p-4 max-w-[85%] sm:max-w-[70%]">
               <div className="flex space-x-1">
                 <div className="w-2 h-2 bg-dark-grey rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-dark-grey rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -424,20 +424,20 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       </div>
 
       {/* Fixed Input Area */}
-      <div className={`bg-white border-t border-gray-200 p-4 fixed bottom-0 left-0 right-0 z-10 ${(hasActiveQuestionnaire || phase4Complete) ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="flex gap-3 items-center">
+      <div className={`bg-white border-t border-gray-200 p-3 sm:p-4 fixed bottom-0 left-0 right-0 z-10 ${(hasActiveQuestionnaire || phase4Complete) ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="flex gap-2 sm:gap-3 items-center">
             {/* Microphone Button */}
             <button
             onClick={handleMicClick}
             disabled={hasActiveQuestionnaire || isLoading || phase4Complete || isTranscribing}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
                 isRecording
                 ? 'bg-red text-white animate-pulse'
                 : 'bg-light-purple text-muted-purple'
             } ${(hasActiveQuestionnaire || isLoading || phase4Complete) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
             <svg
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 fill={isRecording ? "currentColor" : "none"}
                 stroke="currentColor"
                 viewBox="0 0 24 24"
