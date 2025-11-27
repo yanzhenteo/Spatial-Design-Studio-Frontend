@@ -210,9 +210,9 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center pt-16 pb-6 px-4 sm:pt-20 sm:pb-8 sm:px-6"
+        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center p-4 sm:p-6"
       >
-      {/* Back Button Component - Centered and properly spaced */}
+      {/* Back Button Component - Removed top buffer */}
       <div className="w-full max-w-md mb-4 sm:mb-6">
         <BackButton onBack={onBack} />
       </div>
