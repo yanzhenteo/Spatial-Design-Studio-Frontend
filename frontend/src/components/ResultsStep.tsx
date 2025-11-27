@@ -178,7 +178,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                         const rect = container.getBoundingClientRect();
 
                         const handleTouchMove = (moveEvent: TouchEvent) => {
-                          moveEvent.preventDefault();
+                          // moveEvent.preventDefault();
                           if (moveEvent.touches.length > 0) {
                             const x = moveEvent.touches[0].clientX - rect.left;
                             const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));

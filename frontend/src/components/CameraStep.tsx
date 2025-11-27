@@ -6,6 +6,7 @@ import DoubleButton from './DoubleButton';
 interface CameraStepProps {
   selectedIssues: string[];
   comments: string;
+  noChangeComments: string;
   onAnalysisComplete: (results: AnalysisResults) => void;
   onImageReady?: (uploadFn: (() => Promise<void>) | null) => void;
   onNext?: () => void;
@@ -15,6 +16,7 @@ interface CameraStepProps {
 const CameraStep: React.FC<CameraStepProps> = ({
   selectedIssues,
   comments,
+  noChangeComments,
   onAnalysisComplete,
   onImageReady,
   onNext,
@@ -66,6 +68,7 @@ const CameraStep: React.FC<CameraStepProps> = ({
   // Use refs to store the latest values without triggering re-renders
   const selectedIssuesRef = React.useRef(selectedIssues);
   const commentsRef = React.useRef(comments);
+  const noChangeCommentsRef = React.useRef(noChangeComments);
   const onAnalysisCompleteRef = React.useRef(onAnalysisComplete);
   const onNextRef = React.useRef(onNext);
   const onImageCapturedRef = React.useRef(onImageCaptured);
@@ -74,16 +77,17 @@ const CameraStep: React.FC<CameraStepProps> = ({
   React.useEffect(() => {
     selectedIssuesRef.current = selectedIssues;
     commentsRef.current = comments;
+    noChangeCommentsRef.current = noChangeComments;
     onAnalysisCompleteRef.current = onAnalysisComplete;
     onNextRef.current = onNext;
     onImageCapturedRef.current = onImageCaptured;
-  }, [selectedIssues, comments, onAnalysisComplete, onNext, onImageCaptured]);
+  }, [selectedIssues, comments, noChangeComments, onAnalysisComplete, onNext, onImageCaptured]);
 
   const handleUploadImage = useCallback(async () => {
     setCameraError(null);
     try {
       console.log("handleUploadImage: Starting upload with issues:", selectedIssuesRef.current);
-      const results = await uploadImage(selectedIssuesRef.current, commentsRef.current);
+      const results = await uploadImage(selectedIssuesRef.current, commentsRef.current, noChangeCommentsRef.current);
       console.log("handleUploadImage: Upload completed, got results:", results);
       // Explicitly call onAnalysisComplete with the results
       if (results && onAnalysisCompleteRef.current) {
@@ -164,13 +168,14 @@ const CameraStep: React.FC<CameraStepProps> = ({
       console.log("handleGalleryImageUpload: Starting image analysis and transformation pipeline for gallery image...");
       console.log("handleGalleryImageUpload: Selected issues:", selectedIssuesRef.current);
       console.log("handleGalleryImageUpload: Comments:", commentsRef.current);
+      console.log("handleGalleryImageUpload: No-change comments:", noChangeCommentsRef.current);
 
       // Convert base64 data URL to blob
       const response = await fetch(galleryImageRef.current);
       const blob = await response.blob();
 
-      // Call the analysis and transformation service (same as camera upload)
-      const result = await analyzeAndTransformImage(blob);
+      // Call the analysis and transformation service WITH user context (same as camera upload)
+      const result = await analyzeAndTransformImage(blob, selectedIssuesRef.current, commentsRef.current, noChangeCommentsRef.current);
 
       if (!result.success) {
         throw new Error(result.error || "Analysis and transformation failed.");
