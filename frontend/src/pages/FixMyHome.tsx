@@ -261,6 +261,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
                 <CameraStep
                   selectedIssues={selectedIssues}
                   comments={comments}
+                  noChangeComments={noChangeComments}
                   onAnalysisComplete={handleAnalysisComplete}
                   onImageReady={handleImageReady}
                   onNext={handleNext}
