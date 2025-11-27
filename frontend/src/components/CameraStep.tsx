@@ -168,13 +168,14 @@ const CameraStep: React.FC<CameraStepProps> = ({
       console.log("handleGalleryImageUpload: Starting image analysis and transformation pipeline for gallery image...");
       console.log("handleGalleryImageUpload: Selected issues:", selectedIssuesRef.current);
       console.log("handleGalleryImageUpload: Comments:", commentsRef.current);
+      console.log("handleGalleryImageUpload: No-change comments:", noChangeCommentsRef.current);
 
       // Convert base64 data URL to blob
       const response = await fetch(galleryImageRef.current);
       const blob = await response.blob();
 
-      // Call the analysis and transformation service (same as camera upload)
-      const result = await analyzeAndTransformImage(blob);
+      // Call the analysis and transformation service WITH user context (same as camera upload)
+      const result = await analyzeAndTransformImage(blob, selectedIssuesRef.current, commentsRef.current, noChangeCommentsRef.current);
 
       if (!result.success) {
         throw new Error(result.error || "Analysis and transformation failed.");

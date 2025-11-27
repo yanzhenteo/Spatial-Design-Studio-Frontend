@@ -201,8 +201,8 @@ export const useCamera = (onUploadComplete?: (results: AnalysisResults) => void)
       console.log("Comments:", comments);
       console.log("No-change comments:", noChangeComments);
 
-      // Call the analysis and transformation service
-      const result = await analyzeAndTransformImage(blob);
+      // Call the analysis and transformation service WITH user context
+      const result = await analyzeAndTransformImage(blob, selectedIssues, comments, noChangeComments);
 
       if (!result.success) {
         throw new Error(result.error || "Analysis and transformation failed.");

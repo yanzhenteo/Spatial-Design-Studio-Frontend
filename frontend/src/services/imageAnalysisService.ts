@@ -74,9 +74,36 @@ export interface AnalysisAndTransformResult {
 /**
  * Analyze an image for dementia safety issues
  */
-export async function analyzeImage(imageBlob: Blob): Promise<AnalysisResult> {
+export async function analyzeImage(
+  imageBlob: Blob,
+  selectedIssues?: string[],
+  comments?: string,
+  noChangeComments?: string
+): Promise<AnalysisResult> {
   const formData = new FormData();
   formData.append('file', imageBlob, 'captured-image.jpg');
+
+  // Add user context if provided
+  // Backend expects: { assessment: { selectedIssues, comments, noChangeComments } }
+  if (selectedIssues || comments || noChangeComments) {
+    const assessmentData: any = {};
+
+    if (selectedIssues && selectedIssues.length > 0) {
+      assessmentData.selectedIssues = selectedIssues;
+    }
+
+    if (comments && comments.trim()) {
+      assessmentData.comments = comments.trim();
+    }
+
+    if (noChangeComments && noChangeComments.trim()) {
+      assessmentData.noChangeComments = noChangeComments.trim();
+    }
+
+    const userContext = { assessment: assessmentData };
+    formData.append('user_context', JSON.stringify(userContext));
+    console.log('[analyzeImage] Sending user context:', userContext);
+  }
 
   const response = await fetch('/rag-api/analyze', {
     method: 'POST',
@@ -165,15 +192,25 @@ export async function downloadTransformedImage(
  * Complete pipeline: Analyze and transform image
  *
  * @param imageBlob - The captured or uploaded image
+ * @param selectedIssues - Selected dementia-related issues
+ * @param comments - User's additional comments
+ * @param noChangeComments - Items the user doesn't want to change
  * @returns Analysis text, issues, and transformed image URL
  */
 export async function analyzeAndTransformImage(
-  imageBlob: Blob
+  imageBlob: Blob,
+  selectedIssues?: string[],
+  comments?: string,
+  noChangeComments?: string
 ): Promise<AnalysisAndTransformResult> {
   try {
-    // Step 1: Analyze the image
-    console.log('Step 1: Analyzing image...');
-    const analysisResult = await analyzeImage(imageBlob);
+    // Step 1: Analyze the image with user context
+    console.log('Step 1: Analyzing image with user context...');
+    if (selectedIssues) console.log('- Selected issues:', selectedIssues);
+    if (comments) console.log('- Comments:', comments);
+    if (noChangeComments) console.log('- No-change comments:', noChangeComments);
+
+    const analysisResult = await analyzeImage(imageBlob, selectedIssues, comments, noChangeComments);
 
     if (!analysisResult.success || !analysisResult.analysis_json) {
       return {
