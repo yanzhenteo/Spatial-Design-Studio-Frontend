@@ -11,9 +11,11 @@ dotenv.config({ path: path.join(rootDir, '.env') })
 // Get LAN IP from environment or use defaults
 const LAN_IP = process.env.LAN_IP || '192.168.1.1'
 
-// Use LAN_IP for dev proxy so both localhost and mobile can access services
-// This ensures API calls work whether accessing from your computer or phone
-const PROXY_IP = LAN_IP
+// IMPORTANT: Use localhost for proxying since services are on same machine
+// Services bind to 0.0.0.0 which makes them accessible from:
+//   - localhost (when Vite proxies from same machine)
+//   - LAN IP (when phone accesses directly - though phone accesses via Vite proxy)
+const PROXY_IP = 'localhost'
 
 // Determine HMR host based on access method
 // For localhost: use localhost, for network: use LAN_IP
