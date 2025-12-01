@@ -21,7 +21,7 @@ const CommentsStep: React.FC<CommentsStepProps> = ({
         <textarea
           value={comments}
           onChange={(e) => onCommentsChange(e.target.value)}
-          placeholder="Type your comments here..."
+          placeholder="I want to change..."
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-fill-text text-dark-grey bg-white resize-none"
           rows={4}
         />

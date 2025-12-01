@@ -181,7 +181,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     },
     step2: {
       header: formatSelectedIssues() || "Symptom Overview",
-      content: "Any further comments or elaboration you would like to add?",
+      content: "Is there anything you want to change?",
       secondQuestion: "Is there anything that you do not want to change?",
       symptomDescriptions: getSymptomDescriptions().join(' '),
     },
