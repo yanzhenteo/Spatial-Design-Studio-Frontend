@@ -38,7 +38,9 @@ function PreMemoryBot({ onBack, onContinue }: PreMemoryBotProps) {
         <p className="text-big-text text-dark-grey text-center px-2 sm:px-0 mb-4 sm:mb-6">
           Let me introduce you to Mei Ling, your best companion and listener. She will be here to listen to your problems and keep you company!
         </p>
-        
+        <p className="text-big-text text-dark-grey text-center px-2 sm:px-0 mb-4 sm:mb-6">
+          She will ask you questions to know you better, so do not hesitate to <u><strong>talk more about yourself</strong></u>!
+        </p>
         <DoubleButton
           variant="primary"
           leftButton={{

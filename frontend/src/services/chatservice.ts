@@ -44,7 +44,7 @@ export const ACTIVITY_TOPICS: QuestionItem[] = [
   { id: 'topic12', question: 'Pets & animals', selected: false },
 ];
 
-export const INITIAL_SYMPTOM_MESSAGE = "Good Evening, I am Mei Ling! Please help me fill in this interactive questionnaire regarding your symptoms. Please turn up your volume:";
+export const INITIAL_SYMPTOM_MESSAGE = "Good Evening, I am Mei Ling! Please help me fill in this interactive questionnaire regarding your symptoms.";
 export const ACTIVITY_SELECTION_MESSAGE = "Now, pick two topics that are most meaningful to them:";
 export const MAX_ACTIVITY_SELECTIONS = 2;
 
