@@ -22,7 +22,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
   if (!analysisResults) {
     return (
       <div className="w-full mb-6 space-y-4">
-        <div className="bg-white border-2 border-gray-300 rounded-lg p-6">
+        <div className="bg-white border-2 border-gray-300 rounded-lg p-4 sm:p-6">
           <p className="text-big-text text-dark-grey text-center">
             No results available yet.
           </p>
@@ -63,34 +63,36 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
   };
 
   return (
-    <div className="w-full mb-6 space-y-4">
-      {/* Tab Navigation */}
+    <div className="w-full mb-6 space-y-4 px-2 sm:px-0">
+      {/* Tab Navigation - FIXED: Added responsive font size */}
       <div className="bg-white border-2 border-gray-300 rounded-lg overflow-hidden">
         <div className="flex border-b-2 border-gray-300">
           <button
             onClick={() => handleTabSwitch('comparison')}
-            className={`flex-1 px-4 py-3 text-center font-medium transition-colors ${
+            className={`flex-1 px-3 sm:px-4 py-3 text-center font-medium transition-colors ${
               activeTab === 'comparison'
                 ? 'bg-gray-100 text-dark-grey border-b-2 border-dark-grey -mb-[2px]'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            Comparison
+            <span className="text-xs sm:text-sm">Comparison</span>
           </button>
           <button
             onClick={() => handleTabSwitch('recommendations')}
-            className={`flex-1 px-4 py-3 text-center font-medium transition-colors ${
+            className={`flex-1 px-3 sm:px-4 py-3 text-center font-medium transition-colors ${
               activeTab === 'recommendations'
                 ? 'bg-gray-100 text-dark-grey border-b-2 border-dark-grey -mb-[2px]'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            Recommendations {issues && issues.length > 0 && `(${issues.length})`}
+            <span className="text-xs sm:text-sm">
+              Recommendations {issues && issues.length > 0 && `(${issues.length})`}
+            </span>
           </button>
         </div>
 
         {/* Tab Content */}
-        <div className="p-4">
+        <div className="p-3 sm:p-4">
           {/* Comparison Tab with Interactive Slider */}
           {activeTab === 'comparison' && (
             <div>
@@ -100,7 +102,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                     Comparison
                   </h3>
 
-                  {/* Interactive Before/After Slider */}
+                  {/* Interactive Before/After Slider - NO CHANGES TO IMAGE/MASKING */}
                   <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden">
                     {/* Before Image (Full Background) - This sets the container height */}
                     <img
@@ -203,49 +205,49 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                     <span className="bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">After</span>
                   </div>
 
-                  <p className="text-sm text-gray-600 mt-1 text-center">
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1 text-center">
                     Drag the slider to compare before and after
                   </p>
 
                   {/* Issue Information Carousel */}
                   {issues && issues.length > 0 && (
-                    <div className="mt-4 bg-white border-2 border-gray-300 rounded-lg p-4">
+                    <div className="mt-4 bg-white border-2 border-gray-300 rounded-lg p-3 sm:p-4">
                       {isOverallView ? (
                         <>
-                          <h4 className="font-medium text-dark-grey text-center mb-3">
+                          <h4 className="font-medium text-dark-grey text-center mb-3 text-sm sm:text-base">
                             Overall Analysis
                           </h4>
-                          <p className="text-sm text-gray-600 text-center">
+                          <p className="text-xs sm:text-sm text-gray-600 text-center">
                             {issues.length} issue{issues.length !== 1 ? 's' : ''} detected across the space.
                             Navigate through the carousel to see individual details.
                           </p>
                         </>
                       ) : (
                         <>
-                          <h4 className="font-medium text-dark-grey text-center mb-3">
+                          <h4 className="font-medium text-dark-grey text-center mb-3 text-sm sm:text-base">
                             Detected Issue {carouselIndex + 1} of {issues.length}
                           </h4>
 
                           {/* Issue Details */}
-                          <div className="space-y-3">
+                          <div className="space-y-2 sm:space-y-3">
                             {currentIssue?.item && (
                               <div>
-                                <span className="font-semibold text-dark-grey">Item: </span>
-                                <span className="text-gray-700">{currentIssue.item}</span>
+                                <span className="font-semibold text-dark-grey text-sm sm:text-base">Item: </span>
+                                <span className="text-gray-700 text-sm sm:text-base">{currentIssue.item}</span>
                               </div>
                             )}
 
                             {currentIssue?.recommendation && (
                               <div>
-                                <span className="font-semibold text-dark-grey">Recommendation: </span>
-                                <span className="text-gray-700">{currentIssue.recommendation}</span>
+                                <span className="font-semibold text-dark-grey text-sm sm:text-base">Recommendation: </span>
+                                <span className="text-gray-700 text-sm sm:text-base">{currentIssue.recommendation}</span>
                               </div>
                             )}
 
                             {currentIssue?.explanation && (
                               <div>
-                                <span className="font-semibold text-dark-grey">Explanation: </span>
-                                <span className="text-gray-700">{currentIssue.explanation}</span>
+                                <span className="font-semibold text-dark-grey text-sm sm:text-base">Explanation: </span>
+                                <span className="text-gray-700 text-sm sm:text-base">{currentIssue.explanation}</span>
                               </div>
                             )}
                           </div>
@@ -255,11 +257,11 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                       {/* Navigation Controls */}
                       <div className="flex flex-col items-center space-y-3 mt-4">
                         {/* Dot Indicators - Include Overall (-1) as first dot */}
-                        <div className="flex space-x-3">
+                        <div className="flex space-x-2 sm:space-x-3">
                           {/* Overall dot */}
                           <button
                             onClick={() => setCarouselIndex(-1)}
-                            className={`w-3 h-3 rounded-full transition-colors ${
+                            className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-colors ${
                               carouselIndex === -1
                                 ? 'bg-gray-800'
                                 : 'bg-gray-300'
@@ -271,7 +273,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                             <button
                               key={index}
                               onClick={() => setCarouselIndex(index)}
-                              className={`w-3 h-3 rounded-full transition-colors ${
+                              className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-colors ${
                                 index === carouselIndex
                                   ? 'bg-gray-800'
                                   : 'bg-gray-300'
@@ -282,37 +284,37 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                         </div>
 
                         {/* Previous/Next Buttons */}
-                        <div className="flex space-x-4 items-center">
+                        <div className="flex space-x-3 sm:space-x-4 items-center">
                           <button
                             onClick={handlePrevious}
                             disabled={carouselIndex === -1}
-                            className={`p-2 rounded-full transition-colors ${
+                            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
                               carouselIndex === -1
                                 ? 'text-gray-400 cursor-not-allowed'
                                 : 'text-dark-grey hover:bg-gray-100'
                             }`}
                             aria-label="Previous issue"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                           </button>
 
-                          <span className="text-sm text-gray-600 min-w-20 text-center">
+                          <span className="text-xs sm:text-sm text-gray-600 min-w-16 sm:min-w-20 text-center">
                             {isOverallView ? 'Overall' : `${carouselIndex + 1} / ${issues.length}`}
                           </span>
 
                           <button
                             onClick={handleNext}
                             disabled={carouselIndex === issues.length - 1}
-                            className={`p-2 rounded-full transition-colors ${
+                            className={`p-1.5 sm:p-2 rounded-full transition-colors ${
                               carouselIndex === issues.length - 1
                                 ? 'text-gray-400 cursor-not-allowed'
                                 : 'text-dark-grey hover:bg-gray-100'
                             }`}
                             aria-label="Next issue"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                           </button>
@@ -322,7 +324,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   )}
                 </>
               ) : (
-                <p className="text-center text-gray-500">No images available for comparison</p>
+                <p className="text-center text-gray-500 text-sm sm:text-base">No images available for comparison</p>
               )}
             </div>
           )}
@@ -338,7 +340,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                     Recommendations ({issues.length})
                   </h3>
 
-                  {/* After Image - Unified Container */}
+                  {/* After Image - Unified Container - NO CHANGES TO IMAGE/MASKING */}
                   {transformedImageUrl && (
                     <>
                       <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden">
@@ -376,7 +378,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                   <div className="space-y-4">
                     {/* Recommendation Header (Compact) */}
                     <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-2 sm:gap-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-medium text-gray-500">Change {carouselIndex + 1} of {issues.length}</span>
@@ -392,28 +394,28 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                           <button
                             onClick={handlePrevious}
                             disabled={carouselIndex <= 0}
-                            className={`p-1.5 rounded-full transition-colors ${
+                            className={`p-1 sm:p-1.5 rounded-full transition-colors ${
                               carouselIndex <= 0
                                 ? 'text-gray-300 cursor-not-allowed'
                                 : 'text-dark-grey hover:bg-gray-200'
                             }`}
                             aria-label="Previous recommendation"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                             </svg>
                           </button>
                           <button
                             onClick={handleNext}
                             disabled={carouselIndex >= issues.length - 1}
-                            className={`p-1.5 rounded-full transition-colors ${
+                            className={`p-1 sm:p-1.5 rounded-full transition-colors ${
                               carouselIndex >= issues.length - 1
                                 ? 'text-gray-300 cursor-not-allowed'
                                 : 'text-dark-grey hover:bg-gray-200'
                             }`}
                             aria-label="Next recommendation"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                           </button>
@@ -421,15 +423,15 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                       </div>
 
                       {/* Dot indicators */}
-                      <div className="flex justify-center space-x-2 mt-3">
+                      <div className="flex justify-center space-x-1 sm:space-x-2 mt-3">
                         {issues.map((_, index) => (
                           <button
                             key={index}
                             onClick={() => setCarouselIndex(index)}
-                            className={`w-2 h-2 rounded-full transition-all ${
+                            className={`h-2 rounded-full transition-all ${
                               index === carouselIndex
-                                ? 'bg-gray-800 w-6'
-                                : 'bg-gray-300 hover:bg-gray-400'
+                                ? 'bg-gray-800 w-4 sm:w-6'
+                                : 'bg-gray-300 hover:bg-gray-400 w-2'
                             }`}
                             aria-label={`Go to recommendation ${index + 1}`}
                           />
@@ -439,22 +441,15 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
 
                     {/* Where to Buy Section - Scrollable Cards */}
                     <div>
-                      <h4 className="font-semibold text-dark-grey mb-3 text-center">
+                      <h4 className="font-semibold text-dark-grey mb-3 text-center text-sm sm:text-base">
                         Where to Buy
                       </h4>
 
                       {currentIssue?.['Website link'] && currentIssue?.['Website name'] &&
                        currentIssue['Website link'].length > 0 ? (
                         <div className="space-y-3">
-                          {/* Search query info */}
-                          {/* {currentIssue['Search query used'] && (
-                            <p className="text-xs text-center text-gray-500 italic">
-                              Searched for: "{currentIssue['Search query used']}"
-                            </p>
-                          )} */}
-
                           {/* Scrollable card container */}
-                          <div className="max-h-[400px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                          <div className="max-h-[350px] sm:max-h-[400px] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                             {currentIssue['Website link'].map((link, idx) => (
                               <LinkPreviewCard
                                 key={idx}
@@ -471,11 +466,11 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
                           </p>
                         </div>
                       ) : (
-                        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                          <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="text-center py-6 sm:py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <svg className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                           </svg>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-xs sm:text-sm text-gray-500">
                             No purchase needed or sellers not found
                           </p>
                         </div>
@@ -498,15 +493,6 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ analysisResults, originalImag
           )}
         </div>
       </div>
-
-      {/* Next Steps */}
-      {/* <div className="bg-white border-2 border-gray-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-dark-grey mb-3 text-center">Next Steps</h3>
-        <ul className="list-disc list-inside space-y-2 text-sm text-gray-600">
-          <li>Review the recommended improvements above</li>
-          <li>Consider implementing changes gradually</li>
-        </ul>
-      </div> */}
     </div>
   );
 };

@@ -56,7 +56,7 @@ function HomePage({ onStart, onNavigate, currentPage }: HomePageProps) {
           >
             {/* Header Card */}
             <HeaderCard className="mb-4 sm:mb-6">
-              <h1 className="text-header text-dark-grey text-center sm:text-left">
+              <h1 className="text-header text-dark-grey text-center">
                 Fix My Home
               </h1>
             </HeaderCard>
