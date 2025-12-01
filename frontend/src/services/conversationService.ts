@@ -18,6 +18,40 @@ export interface SaveConversationResult {
   error?: string;
 }
 
+export interface PreferenceSummary {
+  _id: string;
+  user: string;
+  conversation: string;
+  color_and_contrast?: {
+    user_preferences: string[];
+    guideline_considerations: string[];
+    balanced_recommendations: string[];
+    confidence_level: 'high' | 'medium' | 'low';
+  };
+  familiarity_and_identity?: {
+    user_preferences: string[];
+    guideline_considerations: string[];
+    balanced_recommendations: string[];
+    confidence_level: 'high' | 'medium' | 'low';
+  };
+  overall_summary?: string;
+  metadata?: {
+    timestamp: string;
+    model: string;
+    conversation_id: string;
+    message_count: number;
+    rag_enabled: boolean;
+    vector_store: string | null;
+  };
+  createdAt: Date;
+}
+
+export interface LatestPreferenceSummaryResult {
+  success: boolean;
+  summary?: string;  // Just the overall summary text
+  error?: string;
+}
+
 /**
  * Gets the authentication token from localStorage
  * @returns The auth token or throws an error if not found
@@ -247,6 +281,55 @@ export function handleTopicTransition(
   }
 
   return result;
+}
+
+/**
+ * Fetches the latest preference summary for the authenticated user
+ * @returns Result containing just the overall summary text
+ */
+export async function fetchLatestPreferenceSummary(): Promise<LatestPreferenceSummaryResult> {
+  try {
+    const token = getAuthToken();
+
+    const response = await fetchWithRetry(
+      '/api/conversations/latest-preference-summary',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      },
+      {
+        retries: 2,
+        retryDelayMs: 500,
+        timeoutMs: 5000,
+      }
+    );
+
+    if (response.status === 404) {
+      // No preference summary found - this is not an error, just no data yet
+      return { success: true, summary: '' };
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch preference summary: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Preference summary fetched successfully');
+
+    return {
+      success: true,
+      summary: data.summary || ''
+    };
+  } catch (error) {
+    console.error('Error fetching preference summary:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      summary: '' // Return empty string as fallback
+    };
+  }
 }
 
 // ============================================================================

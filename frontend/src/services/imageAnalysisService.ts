@@ -9,6 +9,7 @@
  */
 
 import { batchSearchProductSellers } from './searchService';
+import { fetchLatestPreferenceSummary } from './conversationService';
 
 export interface BoundingBoxDetection {
   label: string;
@@ -83,27 +84,42 @@ export async function analyzeImage(
   const formData = new FormData();
   formData.append('file', imageBlob, 'captured-image.jpg');
 
-  // Add user context if provided
-  // Backend expects: { assessment: { selectedIssues, comments, noChangeComments } }
-  if (selectedIssues || comments || noChangeComments) {
-    const assessmentData: any = {};
+  // Fetch preference summary from backend
+  console.log('[analyzeImage] Fetching preference summary...');
+  const preferenceSummaryResult = await fetchLatestPreferenceSummary();
+  const preferenceSummary = preferenceSummaryResult.success ? preferenceSummaryResult.summary : '';
 
-    if (selectedIssues && selectedIssues.length > 0) {
-      assessmentData.selectedIssues = selectedIssues;
-    }
-
-    if (comments && comments.trim()) {
-      assessmentData.comments = comments.trim();
-    }
-
-    if (noChangeComments && noChangeComments.trim()) {
-      assessmentData.noChangeComments = noChangeComments.trim();
-    }
-
-    const userContext = { assessment: assessmentData };
-    formData.append('user_context', JSON.stringify(userContext));
-    console.log('[analyzeImage] Sending user context:', userContext);
+  if (preferenceSummary) {
+    console.log('[analyzeImage] Preference summary loaded:', preferenceSummary);
+  } else {
+    console.log('[analyzeImage] No preference summary available');
   }
+
+  // Add user context if provided
+  // Backend expects: { assessment: { selectedIssues, comments, noChangeComments }, preferenceSummary }
+  const assessmentData: any = {};
+
+  if (selectedIssues && selectedIssues.length > 0) {
+    assessmentData.selectedIssues = selectedIssues;
+  }
+
+  if (comments && comments.trim()) {
+    assessmentData.comments = comments.trim();
+  }
+
+  if (noChangeComments && noChangeComments.trim()) {
+    assessmentData.noChangeComments = noChangeComments.trim();
+  }
+
+  // Build user context with preference summary
+  const userContext: any = { assessment: assessmentData };
+
+  if (preferenceSummary) {
+    userContext.preferenceSummary = preferenceSummary;
+  }
+
+  formData.append('user_context', JSON.stringify(userContext));
+  console.log('[analyzeImage] Sending user context:', userContext);
 
   const response = await fetch('/rag-api/analyze', {
     method: 'POST',
