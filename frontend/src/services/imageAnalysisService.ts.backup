@@ -1,35 +1,14 @@
 /**
  * Image Analysis and Transformation Service
  *
- * Uses adapter pattern to support both local and Modal-hosted services.
- * Set VITE_USE_MODAL_SERVICES in .env to switch between implementations.
- *
- * Local services (VITE_USE_MODAL_SERVICES=false):
+ * Handles communication with backend APIs through Vite proxy:
  * - /rag-api -> RAG-Langchain service (port 8001)
  * - /image-gen-api -> Picture Generation service (port 8002)
  * - /detection-api -> Detection service (port 8004)
  * - /product-search-api -> Product Search service (port 8005)
- *
- * Modal services (VITE_USE_MODAL_SERVICES=true):
- * - /rag-api -> RAG-Langchain service (port 8001) - still local
- * - Transform: Modal-hosted endpoint (returns base64)
- * - Detection: Modal-hosted endpoint (/identify-changes)
- * - /product-search-api -> Product Search service (port 8005) - still local
  */
 
 import { batchSearchProductSellers } from './searchService';
-import { fetchLatestPreferenceSummary } from './conversationService';
-import type { IImageAnalysisAdapter } from './adapters/IImageAnalysisAdapter';
-import { LocalImageAnalysisAdapter } from './adapters/imageAnalysisLocal';
-import { ModalImageAnalysisAdapter } from './adapters/imageAnalysisModal';
-
-// Initialize the appropriate adapter based on environment variable
-const useModalServices = import.meta.env.VITE_USE_MODAL_SERVICES === 'true';
-const adapter: IImageAnalysisAdapter = useModalServices
-  ? new ModalImageAnalysisAdapter()
-  : new LocalImageAnalysisAdapter();
-
-console.log(`[ImageAnalysisService] Using ${useModalServices ? 'Modal' : 'Local'} adapter`);
 
 export interface BoundingBoxDetection {
   label: string;
@@ -68,6 +47,22 @@ export interface AnalysisResult {
   error?: string;
 }
 
+export interface TransformResult {
+  success: boolean;
+  transformed_image_path: string | null;
+  error?: string;
+}
+
+export interface DetectionResult {
+  success: boolean;
+  analysis_with_boxes: {
+    issues: Issue[];
+  } | null;
+  detected_count?: number;
+  processing_time?: number;
+  error?: string;
+}
+
 export interface AnalysisAndTransformResult {
   success: boolean;
   analysisText: string;
@@ -78,7 +73,6 @@ export interface AnalysisAndTransformResult {
 
 /**
  * Analyze an image for dementia safety issues
- * This always uses the local RAG service
  */
 export async function analyzeImage(
   imageBlob: Blob,
@@ -89,42 +83,27 @@ export async function analyzeImage(
   const formData = new FormData();
   formData.append('file', imageBlob, 'captured-image.jpg');
 
-  // Fetch preference summary from backend
-  console.log('[analyzeImage] Fetching preference summary...');
-  const preferenceSummaryResult = await fetchLatestPreferenceSummary();
-  const preferenceSummary = preferenceSummaryResult.success ? preferenceSummaryResult.summary : '';
-
-  if (preferenceSummary) {
-    console.log('[analyzeImage] Preference summary loaded:', preferenceSummary);
-  } else {
-    console.log('[analyzeImage] No preference summary available');
-  }
-
   // Add user context if provided
-  // Backend expects: { assessment: { selectedIssues, comments, noChangeComments }, preferenceSummary }
-  const assessmentData: any = {};
+  // Backend expects: { assessment: { selectedIssues, comments, noChangeComments } }
+  if (selectedIssues || comments || noChangeComments) {
+    const assessmentData: any = {};
 
-  if (selectedIssues && selectedIssues.length > 0) {
-    assessmentData.selectedIssues = selectedIssues;
+    if (selectedIssues && selectedIssues.length > 0) {
+      assessmentData.selectedIssues = selectedIssues;
+    }
+
+    if (comments && comments.trim()) {
+      assessmentData.comments = comments.trim();
+    }
+
+    if (noChangeComments && noChangeComments.trim()) {
+      assessmentData.noChangeComments = noChangeComments.trim();
+    }
+
+    const userContext = { assessment: assessmentData };
+    formData.append('user_context', JSON.stringify(userContext));
+    console.log('[analyzeImage] Sending user context:', userContext);
   }
-
-  if (comments && comments.trim()) {
-    assessmentData.comments = comments.trim();
-  }
-
-  if (noChangeComments && noChangeComments.trim()) {
-    assessmentData.noChangeComments = noChangeComments.trim();
-  }
-
-  // Build user context with preference summary
-  const userContext: any = { assessment: assessmentData };
-
-  if (preferenceSummary) {
-    userContext.preferenceSummary = preferenceSummary;
-  }
-
-  formData.append('user_context', JSON.stringify(userContext));
-  console.log('[analyzeImage] Sending user context:', userContext);
 
   const response = await fetch('/rag-api/analyze', {
     method: 'POST',
@@ -139,10 +118,78 @@ export async function analyzeImage(
 }
 
 /**
+ * Transform an image based on analysis JSON
+ */
+export async function transformImage(
+  imageBlob: Blob,
+  analysisJson: { issues: Issue[] }
+): Promise<TransformResult> {
+  const formData = new FormData();
+  formData.append('file', imageBlob, 'captured-image.jpg');
+  formData.append('analysis_json', JSON.stringify(analysisJson));
+
+  // This can take a long time (several minutes)
+  const response = await fetch('/image-gen-api/transform', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Picture Generation API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Add bounding box coordinates to analysis JSON using detection service
+ */
+export async function addBoundingBoxes(
+  imageBlob: Blob,
+  analysisJson: { issues: Issue[] }
+): Promise<DetectionResult> {
+  const formData = new FormData();
+  formData.append('file', imageBlob, 'original-image.jpg');
+  formData.append('analysis_json', JSON.stringify(analysisJson));
+
+  const response = await fetch('/detection-api/identify', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Detection API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Download transformed image from the API
+ */
+export async function downloadTransformedImage(
+  imagePath: string
+): Promise<string> {
+  // Extract filename from path
+  const filename = imagePath.split(/[/\\]/).pop();
+
+  if (!filename) {
+    throw new Error('Invalid image path');
+  }
+
+  const response = await fetch(`/image-gen-api/download/${filename}`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download transformed image: ${response.statusText}`);
+  }
+
+  // Convert to blob and create object URL
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
+/**
  * Complete pipeline: Analyze and transform image
- *
- * Uses the configured adapter (local or Modal) for transformation and detection.
- * RAG analysis and product search always use local services.
  *
  * @param imageBlob - The captured or uploaded image
  * @param selectedIssues - Selected dementia-related issues
@@ -157,7 +204,7 @@ export async function analyzeAndTransformImage(
   noChangeComments?: string
 ): Promise<AnalysisAndTransformResult> {
   try {
-    // Step 1: Analyze the image with user context (always local)
+    // Step 1: Analyze the image with user context
     console.log('Step 1: Analyzing image with user context...');
     if (selectedIssues) console.log('- Selected issues:', selectedIssues);
     if (comments) console.log('- Comments:', comments);
@@ -184,13 +231,13 @@ export async function analyzeAndTransformImage(
     console.log('Product Search: Finding sellers for recommended products...');
 
     const [detectionResult, transformResult, searchResult] = await Promise.all([
-      // Step 2a: Add bounding boxes using the configured adapter
-      adapter.addBoundingBoxes(imageBlob, { issues: issues }),
+      // Step 2a: Add bounding boxes using detection service
+      addBoundingBoxes(imageBlob, { issues: issues }),
 
-      // Step 2b: Transform the image using the configured adapter
-      adapter.transformImage(imageBlob, { issues: issues }),
+      // Step 2b: Transform the image
+      transformImage(imageBlob, { issues: issues }),
 
-      // Step 2c: Search for product sellers (always local, runs in parallel)
+      // Step 2c: Search for product sellers (runs in parallel)
       batchSearchProductSellers(issues, 'Singapore', 5).catch(error => {
         console.warn('Product search failed, continuing without links:', error);
         return { total_issues: issues.length, processed: 0, results: issues };
@@ -212,7 +259,7 @@ export async function analyzeAndTransformImage(
     }
 
     // Check transformation result
-    if (!transformResult.success || !transformResult.transformedImageUrl) {
+    if (!transformResult.success || !transformResult.transformed_image_path) {
       return {
         success: false,
         analysisText: analysisResult.analysis_text,
@@ -224,7 +271,11 @@ export async function analyzeAndTransformImage(
       };
     }
 
-    console.log('Step 3: Transformation complete!');
+    // Step 3: Download the transformed image
+    console.log('Step 3: Downloading transformed image...');
+    const transformedImageUrl = await downloadTransformedImage(
+      transformResult.transformed_image_path
+    );
 
     // Step 4: Merge all results (detection + product search)
     console.log('Step 4: Merging detection and product search results...');
@@ -254,7 +305,7 @@ export async function analyzeAndTransformImage(
       success: true,
       analysisText: analysisResult.analysis_text,
       issues: finalIssues,
-      transformedImageUrl: transformResult.transformedImageUrl,
+      transformedImageUrl: transformedImageUrl,
     };
   } catch (error) {
     console.error('Error in analyzeAndTransformImage:', error);
