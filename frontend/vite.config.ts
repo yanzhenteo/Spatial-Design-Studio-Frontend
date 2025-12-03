@@ -37,6 +37,9 @@ export default defineConfig({
   server: {
     // Expose dev server to network (so mobile can connect via LAN IP)
     host: '0.0.0.0',
+    // ADDED: Allow ngrok and other tunneling services
+    allowedHosts: ['.ngrok-free.dev', 'localhost', '.loca.lt'],
+    
     // Explicitly set the origin for HMR (Hot Module Replacement)
     // This tells the browser where to connect back to for hot updates
     middlewareMode: false,
