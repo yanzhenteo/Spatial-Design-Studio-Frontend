@@ -29,7 +29,6 @@ interface ChatPageProps {
 
 interface PermissionStatus {
   microphone: 'granted' | 'denied' | 'prompt' | 'unavailable';
-  speaker: 'granted' | 'denied' | 'prompt' | 'unavailable';
 }
 
 function ChatPage({ onBack, onNext }: ChatPageProps) {
@@ -51,11 +50,12 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [phase1Complete, setPhase1Complete] = useState(false);
   const [permissions, setPermissions] = useState<PermissionStatus>({
-    microphone: 'prompt',
-    speaker: 'prompt'
+    microphone: 'prompt'
   });
   const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [permissionModalType, setPermissionModalType] = useState<'microphone' | 'speaker' | 'both' | null>(null);
+  const [permissionModalType, setPermissionModalType] = useState<'microphone' | null>(null);
+  const [hasUserDismissedModal, setHasUserDismissedModal] = useState(false);
+  const [hasCompletedInitialPermissionCheck, setHasCompletedInitialPermissionCheck] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -84,19 +84,27 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
   useEffect(() => {
     const checkPermissions = async () => {
       const micPermission = await checkMicrophonePermission();
-      const speakerPermission = await checkSpeakerPermission();
-      
+
       setPermissions({
-        microphone: micPermission,
-        speaker: speakerPermission
+        microphone: micPermission
       });
 
-      // If microphone is not granted, show permission modal
-      if (micPermission !== 'granted') {
+      // Only show permission modal if:
+      // 1. Microphone is not granted
+      // 2. User hasn't dismissed the modal before
+      // 3. We check localStorage to see if user previously dismissed it
+      const hasUserPreviouslyDismissed = localStorage.getItem('micPermissionDismissed') === 'true';
+
+      if (micPermission !== 'granted' && !hasUserPreviouslyDismissed) {
         setTimeout(() => {
-          setPermissionModalType(micPermission === 'denied' ? 'microphone' : 'both');
+          setPermissionModalType('microphone');
           setShowPermissionModal(true);
+          // Mark that we've completed the check, but don't allow voiceover yet
+          setHasCompletedInitialPermissionCheck(false);
         }, 1000);
+      } else {
+        // Permission already granted or user dismissed before
+        setHasCompletedInitialPermissionCheck(true);
       }
     };
 
@@ -135,62 +143,42 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     }
   };
 
-  const checkSpeakerPermission = async (): Promise<PermissionStatus['speaker']> => {
-    try {
-      // For speaker, we need to create an audio context and test
-      if (!window.AudioContext && !(window as any).webkitAudioContext) {
-        return 'unavailable';
-      }
-
-      // Create audio context
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Create oscillator to test audio output
-      const oscillator = audioContextRef.current.createOscillator();
-      const gainNode = audioContextRef.current.createGain();
-      gainNode.gain.value = 0; // Silent test
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContextRef.current.destination);
-      oscillator.start();
-      oscillator.stop(audioContextRef.current.currentTime + 0.1);
-      
-      // Check if audio context is running
-      if (audioContextRef.current.state === 'running') {
-        return 'granted';
-      }
-      
-      // Try to resume (might need user interaction)
-      await audioContextRef.current.resume();
-      return 'granted';
-    } catch (error: any) {
-      console.warn('Speaker check failed:', error);
-      if (error.name === 'SecurityError' || error.name === 'NotAllowedError') {
-        return 'denied';
-      }
-      return 'prompt';
-    }
-  };
 
   const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
       console.log('Requesting microphone permission...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const errorMessage = "Microphone access is not supported on this browser. Please use a modern browser like Chrome, Firefox, or Edge.";
+        const errorMsg: Message = {
+          id: Date.now().toString(),
+          text: errorMessage,
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+        setPermissions({ microphone: 'unavailable' });
+        setShowPermissionModal(false);
+        return false;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true
         }
       });
-      
+
       // Stop all tracks immediately since we just needed permission
       stream.getTracks().forEach(track => {
         track.stop();
       });
-      
-      setPermissions(prev => ({ ...prev, microphone: 'granted' }));
+
+      setPermissions({ microphone: 'granted' });
       setShowPermissionModal(false);
-      
+
       // Add success message
       const permissionMessage: Message = {
         id: Date.now().toString(),
@@ -199,22 +187,22 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, permissionMessage]);
-      
+
       return true;
     } catch (error: any) {
       console.error('Microphone permission error:', error);
-      
+
       let errorMessage = "Could not access microphone. ";
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         errorMessage += "Please enable microphone access in your browser settings.";
-        setPermissions(prev => ({ ...prev, microphone: 'denied' }));
+        setPermissions({ microphone: 'denied' });
       } else if (error.name === 'NotFoundError') {
         errorMessage += "No microphone found.";
-        setPermissions(prev => ({ ...prev, microphone: 'unavailable' }));
+        setPermissions({ microphone: 'unavailable' });
       } else {
         errorMessage += "Please try again.";
       }
-      
+
       const errorMsg: Message = {
         id: Date.now().toString(),
         text: errorMessage,
@@ -222,98 +210,39 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMsg]);
-      
+      setShowPermissionModal(false);
+
       return false;
     }
   };
 
-  const requestSpeakerPermission = async (): Promise<boolean> => {
-    try {
-      console.log('Requesting speaker permission...');
-      
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      
-      // Resume audio context (requires user interaction)
-      if (audioContextRef.current.state !== 'running') {
-        await audioContextRef.current.resume();
-      }
-      
-      // Create a silent test to ensure audio output works
-      const oscillator = audioContextRef.current.createOscillator();
-      const gainNode = audioContextRef.current.createGain();
-      gainNode.gain.value = 0;
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContextRef.current.destination);
-      oscillator.start();
-      oscillator.stop(audioContextRef.current.currentTime + 0.1);
-      
-      setPermissions(prev => ({ ...prev, speaker: 'granted' }));
-      
-      // Add success message
-      const permissionMessage: Message = {
-        id: Date.now().toString(),
-        text: "Speaker access granted! You will now hear audio responses.",
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, permissionMessage]);
-      
-      return true;
-    } catch (error: any) {
-      console.error('Speaker permission error:', error);
-      
-      let errorMessage = "Could not access speakers. ";
-      if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-        errorMessage += "Please allow audio playback in your browser settings.";
-        setPermissions(prev => ({ ...prev, speaker: 'denied' }));
-      } else {
-        errorMessage += "Audio playback may not be supported.";
-        setPermissions(prev => ({ ...prev, speaker: 'unavailable' }));
-      }
-      
-      const errorMsg: Message = {
-        id: Date.now().toString(),
-        text: errorMessage,
-        isUser: false,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMsg]);
-      
-      return false;
-    }
-  };
-
-  const requestAllPermissions = async () => {
-    const micGranted = await requestMicrophonePermission();
-    if (micGranted) {
-      await requestSpeakerPermission();
-    }
-  };
 
   const handlePermissionAction = async (action: 'allow' | 'deny' | 'settings') => {
     if (action === 'allow') {
-      if (permissionModalType === 'microphone') {
-        await requestMicrophonePermission();
-      } else if (permissionModalType === 'speaker') {
-        await requestSpeakerPermission();
-      } else if (permissionModalType === 'both') {
-        await requestAllPermissions();
-      }
+      const granted = await requestMicrophonePermission();
+      // Clear the dismissed flag when user allows permissions
+      localStorage.removeItem('micPermissionDismissed');
+      // Allow voiceover to start after user interaction
+      setHasCompletedInitialPermissionCheck(true);
     } else if (action === 'settings') {
       // Inform user about manual settings
       const settingsMessage: Message = {
         id: Date.now().toString(),
-        text: "Please check your browser settings to enable microphone and speaker access for this site. Look for the lock icon in the address bar.",
+        text: "Please check your browser settings to enable microphone access for this site. Look for the lock icon in the address bar.",
         isUser: false,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, settingsMessage]);
       setShowPermissionModal(false);
+      setHasUserDismissedModal(true);
+      localStorage.setItem('micPermissionDismissed', 'true');
+      // Allow voiceover to start even if settings button clicked
+      setHasCompletedInitialPermissionCheck(true);
     } else {
+      // User clicked "Not Now"
       setShowPermissionModal(false);
+      setHasUserDismissedModal(true);
+      localStorage.setItem('micPermissionDismissed', 'true');
       const deniedMessage: Message = {
         id: Date.now().toString(),
         text: "You can enable permissions later by clicking the microphone button or in your browser settings.",
@@ -321,6 +250,8 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, deniedMessage]);
+      // Allow voiceover to start even if user declined
+      setHasCompletedInitialPermissionCheck(true);
     }
   };
 
@@ -332,16 +263,20 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     scrollToBottom();
   }, [messages]);
 
-  // Play the initial message when component mounts and speaker is available
+  // Play the initial message when component mounts
   useEffect(() => {
-    if (permissions.speaker === 'granted') {
+    // Only play if:
+    // 1. The permission modal is not shown
+    // 2. We've completed the initial permission check (user has interacted with modal or no modal needed)
+    // Note: Speaker/audio playback doesn't require explicit permissions, just user interaction
+    if (!showPermissionModal && hasCompletedInitialPermissionCheck) {
       const timer = setTimeout(() => {
         textToSpeech(INITIAL_SYMPTOM_MESSAGE);
       }, 1000);
 
       return () => clearTimeout(timer);
     }
-  }, [textToSpeech, permissions.speaker]);
+  }, [textToSpeech, showPermissionModal, hasCompletedInitialPermissionCheck]);
 
   // Detect completion message and ensure phase4Complete is set
   useEffect(() => {
@@ -430,14 +365,12 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         // Add AI messages to chat
         setMessages(prev => [...prev, ...stepResult.messages]);
 
-        // Play AI messages via text-to-speech if speaker is available
-        if (permissions.speaker === 'granted') {
-          stepResult.messages.forEach(msg => {
-            if (msg.text) {
-              textToSpeech(msg.text);
-            }
-          });
-        }
+        // Play AI messages via text-to-speech
+        stepResult.messages.forEach(msg => {
+          if (msg.text) {
+            textToSpeech(msg.text);
+          }
+        });
 
         // Check if conversation step is complete (no more questions to ask)
         const updatedConversation = stepResult.updatedTopicConversations?.[currentTopic];
@@ -466,19 +399,17 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
           // Add transition messages
           setMessages(prev => [...prev, ...transitionResult.messages]);
 
-          // Play transition messages if speaker is available
-          if (permissions.speaker === 'granted') {
-            transitionResult.messages.forEach((msg, index) => {
-              if (msg.text) {
-                if (index === 0) {
-                  textToSpeech(msg.text);
-                } else {
-                  // Delay second message slightly
-                  setTimeout(() => textToSpeech(msg.text!), 2000);
-                }
+          // Play transition messages
+          transitionResult.messages.forEach((msg, index) => {
+            if (msg.text) {
+              if (index === 0) {
+                textToSpeech(msg.text);
+              } else {
+                // Delay second message slightly
+                setTimeout(() => textToSpeech(msg.text!), 2000);
               }
-            });
-          }
+            }
+          });
         }
 
         setIsLoading(false);
@@ -580,38 +511,17 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
     if (!showPermissionModal) return null;
 
     const getModalContent = () => {
-      switch (permissionModalType) {
-        case 'microphone':
-          return {
-            title: "Microphone Access Required",
-            message: "To use voice input, please allow access to your microphone.",
-            icon: "🎤"
-          };
-        case 'speaker':
-          return {
-            title: "Speaker Access Required",
-            message: "To hear audio responses, please allow access to your speakers.",
-            icon: "🔊"
-          };
-        case 'both':
-          return {
-            title: "Audio Permissions Required",
-            message: "For the best experience, please allow access to both microphone and speakers.",
-            icon: "🎧"
-          };
-        default:
-          return {
-            title: "Permissions Required",
-            message: "This app requires audio permissions to function properly.",
-            icon: "⚙️"
-          };
-      }
+      return {
+        title: "Microphone Access Required",
+        message: "To use voice input, please allow access to your microphone. You'll hear audio responses automatically.",
+        icon: "🎤"
+      };
     };
 
     const content = getModalContent();
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -658,7 +568,7 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
 
   // Permission status indicator component
   const PermissionIndicator = () => {
-    if (permissions.microphone === 'granted' && permissions.speaker === 'granted') {
+    if (permissions.microphone === 'granted') {
       return null;
     }
 
@@ -666,18 +576,13 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
       <div className="fixed top-16 right-4 z-20">
         <button
           onClick={() => {
-            setPermissionModalType('both');
+            setPermissionModalType('microphone');
             setShowPermissionModal(true);
           }}
           className="bg-white shadow-md rounded-full p-2 flex items-center gap-2 text-sm"
         >
-          {permissions.microphone !== 'granted' && (
-            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-          )}
-          {permissions.speaker !== 'granted' && (
-            <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-          )}
-          <span className="text-gray-600">Audio</span>
+          <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+          <span className="text-gray-600">Microphone</span>
         </button>
       </div>
     );
@@ -856,16 +761,16 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
           {/* Microphone Button */}
           <button
             onClick={handleMicClick}
-            disabled={hasActiveQuestionnaire || isLoading || phase4Complete || isTranscribing || permissions.microphone === 'denied'}
+            disabled={hasActiveQuestionnaire || isLoading || phase4Complete || isTranscribing || permissions.microphone === 'unavailable'}
             className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
               isRecording
               ? 'bg-red text-white animate-pulse'
               : permissions.microphone === 'granted'
                 ? 'bg-light-purple text-muted-purple'
                 : 'bg-gray-200 text-gray-400'
-            } ${(hasActiveQuestionnaire || isLoading || phase4Complete) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={permissions.microphone === 'denied' ? 'Microphone access denied' : 
-                   permissions.microphone === 'unavailable' ? 'No microphone detected' : 
+            } ${(hasActiveQuestionnaire || isLoading || phase4Complete || permissions.microphone === 'unavailable') ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={permissions.microphone === 'denied' ? 'Microphone access denied - Click to change settings' :
+                   permissions.microphone === 'unavailable' ? 'No microphone detected' :
                    'Use microphone'}
           >
             <svg
@@ -892,14 +797,10 @@ function ChatPage({ onBack, onNext }: ChatPageProps) {
         </div>
         
         {/* Permission status text */}
-        {(permissions.microphone !== 'granted' || permissions.speaker !== 'granted') && (
+        {permissions.microphone !== 'granted' && (
           <div className="mt-2 text-center">
             <p className="text-xs text-gray-500">
-              {permissions.microphone !== 'granted' && permissions.speaker !== 'granted' 
-                ? "Microphone and speaker access needed for full features" 
-                : permissions.microphone !== 'granted' 
-                  ? "Microphone access needed for voice input"
-                  : "Speaker access needed for audio responses"}
+              Microphone access needed for voice input
             </p>
           </div>
         )}
