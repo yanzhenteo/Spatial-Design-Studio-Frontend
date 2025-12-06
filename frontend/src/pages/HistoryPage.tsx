@@ -187,6 +187,7 @@ function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
                     date={new Date(entry.createdAt)}
                     onClick={() => handleViewLog(entry._id)}
                     onDelete={() => handleDeleteEntry(entry._id)}
+                    previewImage={entry.transformedImage}
                   />
                 </motion.div>
               ))

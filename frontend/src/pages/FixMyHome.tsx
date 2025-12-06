@@ -38,7 +38,7 @@ function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [hasImageSelected, setHasImageSelected] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  // const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Use ref instead of state to avoid triggering re-renders
   const imageUploadFnRef = useRef<(() => Promise<void>) | null>(null);
