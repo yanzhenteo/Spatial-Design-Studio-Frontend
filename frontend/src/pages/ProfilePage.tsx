@@ -74,23 +74,25 @@ function ProfilePage({ onNavigate, currentPage }: ProfilePageProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen bg-gradient-lightpurple-to-lightblue flex flex-col p-4 md:p-6"
+        className="min-h-screen bg-gradient-lightpurple-to-lightblue flex flex-col"
       >
-        {/* Menu Button */}
-        <div className="w-full max-w-6xl mx-auto relative">
-          <button
-            onClick={toggleSideNav}
-            className="text-dark-grey text-button-text flex items-center gap-2 mb-6"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            Menu
-          </button>
+        {/* Sticky Menu Button */}
+        <div className="sticky top-0 z-30 w-full bg-light-purple pt-4 sm:pt-6 pb-4 px-4 sm:px-6" style={{ maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)' }}>
+          <div className="w-full max-w-6xl mx-auto">
+            <button
+              onClick={toggleSideNav}
+              className="text-dark-grey text-button-text flex items-center gap-1 sm:gap-2"
+            >
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <span className="text-sm sm:text-base">Menu</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
-        <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6">
+        <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 px-4 md:px-6 py-4">
           {/* Left Column - User Info Card */}
           <div className="lg:w-1/3">
             <motion.div

@@ -44,7 +44,14 @@ function App() {
   const handleGoBackFromPostMemory = () => handleNavigate('chat');
   const handleFinishFromPostMemory = () => handleNavigate('home');
   const handleStartFromHome = () => handleNavigate('fixmyhome');
-  const handleBackFromFixMyHome = () => handleNavigate('home');
+  const handleBackFromFixMyHome = () => {
+    // If viewing history, go back to history page; otherwise go to home
+    if (historyId) {
+      handleNavigate('history');
+    } else {
+      handleNavigate('home');
+    }
+  };
   const handleBackFromProfile = () => handleNavigate('home');
 
   // Update background based on current page

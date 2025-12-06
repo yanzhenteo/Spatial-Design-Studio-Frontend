@@ -31,23 +31,25 @@ function HomePage({ onStart, onNavigate, currentPage }: HomePageProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-pink-to-purple"
+        className="min-h-screen flex flex-col bg-gradient-pink-to-purple"
       >
-        {/* Menu Button */}
-        <div className="absolute top-6 left-4 sm:left-6 z-20">
-          <button
-            onClick={toggleSideNav}
-            className="text-muted-purple text-button-text flex items-center gap-1 sm:gap-2"
-          >
-            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            <span className="text-sm sm:text-base">Menu</span>
-          </button>
+        {/* Sticky Menu Button */}
+        <div className="sticky top-0 z-30 w-full bg-pink pt-4 sm:pt-6 pb-4 px-4 sm:px-6" style={{ maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)' }}>
+          <div className="w-full max-w-md mx-auto">
+            <button
+              onClick={toggleSideNav}
+              className="text-muted-purple text-button-text flex items-center gap-1 sm:gap-2"
+            >
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <span className="text-sm sm:text-base">Menu</span>
+            </button>
+          </div>
         </div>
 
-        {/* Main Content - Exactly like LoginPage */}
-        <div className="w-full flex items-center justify-center min-h-screen px-4 sm:px-6">
+        {/* Main Content */}
+        <div className="flex-1 flex items-center justify-center px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

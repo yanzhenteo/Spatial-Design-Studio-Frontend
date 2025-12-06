@@ -38,7 +38,7 @@ function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [hasImageSelected, setHasImageSelected] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(!!historyId);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Use ref instead of state to avoid triggering re-renders
   const imageUploadFnRef = useRef<(() => Promise<void>) | null>(null);
@@ -205,7 +205,6 @@ function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
 
     (async () => {
       try {
-        setIsLoadingHistory(true);
         console.log('[FixMyHome] Loading history entry:', historyId);
 
         const result = await fetchFixMyHomeHistoryEntry(historyId);
@@ -237,8 +236,6 @@ function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
       } catch (error) {
         console.error('[FixMyHome] Error loading history:', error);
         onBack();
-      } finally {
-        setIsLoadingHistory(false);
       }
     })();
   }, [historyId, onBack]);
@@ -296,12 +293,9 @@ function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
 
   return (
     <>
-      {/* Full-screen Loading Overlay - show when processing image or loading history */}
+      {/* Full-screen Loading Overlay - show when processing image */}
       {isProcessingImage && (
         <LoadingScreen message="Analyzing your space and generating recommendations..." />
-      )}
-      {isLoadingHistory && (
-        <LoadingScreen message="Loading history entry..." />
       )}
 
       <motion.div
@@ -310,15 +304,21 @@ function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center p-4 sm:p-6"
+        className="min-h-screen bg-gradient-yellow-to-pink flex flex-col items-center"
       >
-      {/* Back Button Component - Removed top buffer */}
-      <div className="w-full max-w-md mb-4 sm:mb-6">
-        <BackButton onBack={onBack} />
+      {/* Sticky Back Button */}
+      <div className="sticky top-0 z-30 w-full bg-yellow pt-4 sm:pt-6 pb-4 px-4 sm:px-6" style={{ maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)' }}>
+        <div className="w-full max-w-md mx-auto flex items-center">
+          <BackButton
+            onBack={onBack}
+            text={historyId ? "Back to History" : "Back to Home"}
+            className="mb-0"
+          />
+        </div>
       </div>
 
-      {/* Animated Card Container - Centered content */}
-      <div className="w-full max-w-md flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-8">
+      {/* Animated Card Container - With proper padding */}
+      <div className="w-full max-w-md flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-8 py-4">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}

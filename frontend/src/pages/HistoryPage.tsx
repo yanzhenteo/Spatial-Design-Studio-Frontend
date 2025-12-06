@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import SideNavigation from '../components/SideNavigation';
 import HeaderCard from '../components/HeaderCard';
 import HistoryCard from '../components/HistoryCard';
-import { fetchFixMyHomeHistory } from '../services/fixMyHomeHistoryService';
+import { fetchFixMyHomeHistory, deleteFixMyHomeHistoryEntry } from '../services/fixMyHomeHistoryService';
 import type { FixMyHomeHistoryEntry } from '../services/fixMyHomeHistoryService';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface HistoryPageProps {
   onNavigate: (page: string) => void;
@@ -17,6 +18,8 @@ function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
   const [historyEntries, setHistoryEntries] = useState<FixMyHomeHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // Fetch history from backend on mount
   useEffect(() => {
@@ -56,31 +59,81 @@ function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
     onNavigate(`fixmyhome-history-${historyId}`);
   };
 
+  const handleDeleteEntry = (historyId: string) => {
+    setDeleteTargetId(historyId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+
+    console.log('[HistoryPage] Deleting entry:', deleteTargetId);
+
+    try {
+      const result = await deleteFixMyHomeHistoryEntry(deleteTargetId);
+
+      if (result.success) {
+        console.log('[HistoryPage] Entry deleted successfully');
+        // Remove the entry from the local state
+        setHistoryEntries(prev => prev.filter(entry => entry._id !== deleteTargetId));
+        setShowDeleteModal(false);
+        setDeleteTargetId(null);
+      } else {
+        console.error('[HistoryPage] Failed to delete entry:', result.error);
+        setShowDeleteModal(false);
+        setDeleteTargetId(null);
+      }
+    } catch (error) {
+      console.error('[HistoryPage] Error deleting entry:', error);
+      setShowDeleteModal(false);
+      setDeleteTargetId(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeleteTargetId(null);
+  };
+
   return (
     <>
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        title="Delete Entry"
+        message="Are you sure you want to delete this history entry? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
+
       <motion.div
         key="history-page"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.6, ease: "easeInOut" }}
-        className="min-h-screen bg-gradient-green-to-blue flex flex-col items-center justify-start p-4 sm:p-6 pt-24" // Added pt-24 for header spacing
+        className="min-h-screen bg-gradient-green-to-blue flex flex-col items-center"
       >
-        {/* Menu Button */}
-        <div className="w-full max-w-md absolute top-6 left-4 sm:left-6 z-20">
-          <button
-            onClick={toggleSideNav}
-            className="text-muted-purple text-button-text flex items-center gap-1 sm:gap-2"
-          >
-            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            <span className="text-sm sm:text-base">Menu</span>
-          </button>
+        {/* Sticky Menu Button */}
+        <div className="sticky top-0 z-30 w-full bg-green pt-4 sm:pt-6 pb-4 px-4 sm:px-6" style={{ maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)' }}>
+          <div className="w-full max-w-md mx-auto">
+            <button
+              onClick={toggleSideNav}
+              className="text-muted-purple text-button-text flex items-center gap-1 sm:gap-2"
+            >
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <span className="text-sm sm:text-base">Menu</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
-        <div className="w-full max-w-md sm:max-w-lg">
+        <div className="w-full max-w-md sm:max-w-lg px-6 sm:px-6 py-4 mx-auto">
           {/* Header Card */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -133,6 +186,7 @@ function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
                   <HistoryCard
                     date={new Date(entry.createdAt)}
                     onClick={() => handleViewLog(entry._id)}
+                    onDelete={() => handleDeleteEntry(entry._id)}
                   />
                 </motion.div>
               ))
