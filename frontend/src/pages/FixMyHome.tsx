@@ -12,10 +12,12 @@ import StepNavigation from '../components/StepNavigation';
 import Button from '../components/Button';
 import LoadingScreen from '../components/LoadingScreen';
 import { fetchIssuesFromLastConversation } from '../services/conversationIssueService';
+import { saveFixMyHomeResult, fetchFixMyHomeHistoryEntry } from '../services/fixMyHomeHistoryService';
 import type { AnalysisResults } from '../utils/cameraUtils';
 
 interface FixMyHomeProps {
   onBack: () => void;
+  historyId?: string; // Optional: if provided, load and display this history entry
 }
 
 // Add this interface for step configurations
@@ -26,8 +28,8 @@ interface StepConfig {
   symptomDescriptions?: string;
 }
 
-function FixMyHome({ onBack }: FixMyHomeProps) {
-  const [currentStep, setCurrentStep] = useState<FeatureStep>('step1');
+function FixMyHome({ onBack, historyId }: FixMyHomeProps) {
+  const [currentStep, setCurrentStep] = useState<FeatureStep>(historyId ? 'step4' : 'step1');
   const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
   const [visibleIssues, setVisibleIssues] = useState<string[]>(ALL_ISSUES);
   const [comments, setComments] = useState('');
@@ -36,12 +38,30 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [hasImageSelected, setHasImageSelected] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(!!historyId);
 
   // Use ref instead of state to avoid triggering re-renders
   const imageUploadFnRef = useRef<(() => Promise<void>) | null>(null);
 
+  // Helper function to convert blob URL to base64
+  const blobUrlToBase64 = async (blobUrl: string): Promise<string> => {
+    try {
+      const response = await fetch(blobUrl);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Error converting blob URL to base64:', error);
+      throw error;
+    }
+  };
+
   // Handle analysis completion from camera/gallery upload
-  const handleAnalysisComplete = useCallback((results: AnalysisResults) => {
+  const handleAnalysisComplete = useCallback(async (results: AnalysisResults) => {
     console.log('Analysis complete, moving to step 4');
     console.log('Results:', results);
     console.log('Setting isProcessingImage to false');
@@ -49,7 +69,38 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
     setAnalysisResults(results);
     setIsProcessingImage(false);
     setCurrentStep('step4');
-  }, []);
+
+    // Save results to MongoDB history
+    console.log('Saving results to history...');
+    try {
+      // Convert blob URL to base64 if it's a blob URL
+      let transformedImageBase64: string | null = results.transformedImageUrl;
+      if (transformedImageBase64 && transformedImageBase64.startsWith('blob:')) {
+        console.log('Converting blob URL to base64...');
+        transformedImageBase64 = await blobUrlToBase64(transformedImageBase64);
+        console.log('Blob URL converted to base64');
+      }
+
+      const saveResult = await saveFixMyHomeResult({
+        selectedIssues,
+        comments,
+        noChangeComments,
+        originalImage: originalImage || '',
+        transformedImage: transformedImageBase64,
+        analysisText: results.analysisText,
+        analysisJson: { issues: results.issues },
+        success: true,
+      });
+
+      if (saveResult.success) {
+        console.log('Results saved to history successfully:', saveResult.historyId);
+      } else {
+        console.error('Failed to save results to history:', saveResult.error);
+      }
+    } catch (error) {
+      console.error('Error saving results to history:', error);
+    }
+  }, [selectedIssues, comments, noChangeComments, originalImage]);
 
   // Add a new function to handle when an image is captured/selected
   const handleImageCaptured = useCallback((imageDataUrl: string | null) => {
@@ -148,8 +199,54 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
       .filter(desc => desc !== '');
   };
 
-  // PRELOAD ISSUES FROM LAST MEMORY BOT CONVERSATION
+  // LOAD HISTORY ENTRY IF historyId IS PROVIDED
   useEffect(() => {
+    if (!historyId) return;
+
+    (async () => {
+      try {
+        setIsLoadingHistory(true);
+        console.log('[FixMyHome] Loading history entry:', historyId);
+
+        const result = await fetchFixMyHomeHistoryEntry(historyId);
+
+        if ('success' in result && result.success && result.entry) {
+          const entry = result.entry;
+          console.log('[FixMyHome] History entry loaded:', entry);
+
+          // Set all the saved data
+          setSelectedIssues(entry.selectedIssues);
+          setComments(entry.comments);
+          setNoChangeComments(entry.noChangeComments);
+          setOriginalImage(entry.originalImage);
+
+          // Convert saved data to AnalysisResults format
+          const analysisResults: AnalysisResults = {
+            analysisText: entry.analysisText,
+            issues: entry.analysisJson?.issues || [],
+            transformedImageUrl: entry.transformedImage,
+          };
+
+          setAnalysisResults(analysisResults);
+          setCurrentStep('step4');
+        } else {
+          console.error('[FixMyHome] Failed to load history:', result.error);
+          // If loading fails, go back
+          onBack();
+        }
+      } catch (error) {
+        console.error('[FixMyHome] Error loading history:', error);
+        onBack();
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    })();
+  }, [historyId, onBack]);
+
+  // PRELOAD ISSUES FROM LAST MEMORY BOT CONVERSATION (only if NOT viewing history)
+  useEffect(() => {
+    if (historyId) return; // Skip if viewing history
+
     (async () => {
       const issuesFromConversation = await fetchIssuesFromLastConversation();
       console.log('[FixMyHome] issuesFromConversation:', issuesFromConversation);
@@ -171,7 +268,7 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
         // selectedIssues stays [] so nothing is preselected.
       }
     })();
-  }, []);
+  }, [historyId]);
 
   // Step configurations
   const stepConfigs: Record<FeatureStep, StepConfig> = {
@@ -199,9 +296,12 @@ function FixMyHome({ onBack }: FixMyHomeProps) {
 
   return (
     <>
-      {/* Full-screen Loading Overlay - show when processing image */}
+      {/* Full-screen Loading Overlay - show when processing image or loading history */}
       {isProcessingImage && (
         <LoadingScreen message="Analyzing your space and generating recommendations..." />
+      )}
+      {isLoadingHistory && (
+        <LoadingScreen message="Loading history entry..." />
       )}
 
       <motion.div

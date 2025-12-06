@@ -16,11 +16,22 @@ type AppState = 'login' | 'welcome' | 'prememorybot' | 'chat' | 'postmemorybot' 
 function App() {
   const [currentPage, setCurrentPage] = useState<AppState>('login');
   const [backgroundClass, setBackgroundClass] = useState('bg-gradient-pink-to-purple');
+  const [historyId, setHistoryId] = useState<string | undefined>(undefined);
 
   // Central navigation handler
   const handleNavigate = (page: string) => {
     console.log('App: Navigating to:', page);
-    setCurrentPage(page as AppState);
+
+    // Check if navigating to a history entry
+    if (page.startsWith('fixmyhome-history-')) {
+      const id = page.replace('fixmyhome-history-', '');
+      setHistoryId(id);
+      setCurrentPage('fixmyhome');
+    } else {
+      // Clear historyId when navigating to other pages
+      setHistoryId(undefined);
+      setCurrentPage(page as AppState);
+    }
   };
 
   // Individual page handlers
@@ -101,9 +112,10 @@ function App() {
         )}
         
         {currentPage === 'fixmyhome' && (
-          <FixMyHome 
-            key="fixmyhome" 
+          <FixMyHome
+            key={historyId ? `fixmyhome-history-${historyId}` : 'fixmyhome'}
             onBack={handleBackFromFixMyHome}
+            historyId={historyId}
           />
         )}
         

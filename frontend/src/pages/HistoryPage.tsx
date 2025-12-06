@@ -1,9 +1,11 @@
 // src/pages/HistoryPage.tsx
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import SideNavigation from '../components/SideNavigation';
 import HeaderCard from '../components/HeaderCard';
 import HistoryCard from '../components/HistoryCard';
+import { fetchFixMyHomeHistory } from '../services/fixMyHomeHistoryService';
+import type { FixMyHomeHistoryEntry } from '../services/fixMyHomeHistoryService';
 
 interface HistoryPageProps {
   onNavigate: (page: string) => void;
@@ -12,39 +14,46 @@ interface HistoryPageProps {
 
 function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
   const [isSideNavOpen, setIsSideNavOpen] = useState(false);
-  const [historyEntries, setHistoryEntries] = useState([
-    // Mock data - in a real app, this would come from an API or localStorage
-    {
-      id: 1,
-      date: new Date('2024-01-15T10:30:00'),
-      onViewLog: () => onNavigate('log-1') // This will navigate to a specific log page
-    },
-    {
-      id: 2,
-      date: new Date('2024-01-10T14:45:00'),
-      onViewLog: () => onNavigate('log-2')
-    },
-    {
-      id: 3,
-      date: new Date('2024-01-05T09:15:00'),
-      onViewLog: () => onNavigate('log-3')
-    },
-    {
-      id: 4,
-      date: new Date('2024-01-01T16:20:00'),
-      onViewLog: () => onNavigate('log-4')
-    },
-  ]);
+  const [historyEntries, setHistoryEntries] = useState<FixMyHomeHistoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch history from backend on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        console.log('[HistoryPage] Fetching history from backend...');
+        const result = await fetchFixMyHomeHistory(50, 0, 'desc');
+
+        if ('success' in result && result.success) {
+          console.log(`[HistoryPage] Loaded ${result.entries.length} history entries`);
+          setHistoryEntries(result.entries);
+        } else {
+          console.error('[HistoryPage] Failed to fetch history:', result.error);
+          setError(result.error || 'Failed to load history');
+        }
+      } catch (err) {
+        console.error('[HistoryPage] Error loading history:', err);
+        setError('An unexpected error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadHistory();
+  }, []);
 
   const toggleSideNav = () => {
     setIsSideNavOpen(!isSideNavOpen);
   };
 
-  const handleViewLog = (logId: string) => {
-    console.log('Viewing log:', logId);
-    // In your actual implementation, you would navigate to the specific log page
-    // For now, we'll use a placeholder navigation
-    onNavigate(`log-${logId}`);
+  const handleViewLog = (historyId: string) => {
+    console.log('Viewing history entry:', historyId);
+    // Navigate to Fix My Home page with the history ID
+    onNavigate(`fixmyhome-history-${historyId}`);
   };
 
   return (
@@ -88,17 +97,42 @@ function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
 
           {/* History List */}
           <div className="space-y-4 sm:space-y-6">
-            {historyEntries.length > 0 ? (
+            {isLoading ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                className="text-center py-8"
+              >
+                <p className="text-big-text text-dark-grey">
+                  Loading history...
+                </p>
+              </motion.div>
+            ) : error ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                className="text-center py-8"
+              >
+                <p className="text-big-text text-dark-grey mb-2">
+                  Error loading history
+                </p>
+                <p className="text-fill-text text-muted-purple">
+                  {error}
+                </p>
+              </motion.div>
+            ) : historyEntries.length > 0 ? (
               historyEntries.map((entry, index) => (
                 <motion.div
-                  key={entry.id}
+                  key={entry._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: index * 0.1 }}
                 >
                   <HistoryCard
-                    date={entry.date}
-                    onClick={() => handleViewLog(entry.id.toString())}
+                    date={new Date(entry.createdAt)}
+                    onClick={() => handleViewLog(entry._id)}
                   />
                 </motion.div>
               ))
@@ -113,7 +147,7 @@ function HistoryPage({ onNavigate, currentPage }: HistoryPageProps) {
                   No history entries yet
                 </p>
                 <p className="text-fill-text text-muted-purple">
-                  Your past generations will appear here once you start using the app.
+                  Your past generations will appear here once you start using Fix My Home.
                 </p>
               </motion.div>
             )}
