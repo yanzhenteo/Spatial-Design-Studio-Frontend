@@ -1,6 +1,6 @@
 // src/pages/ProfilePage.tsx
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import SideNavigation from '../components/SideNavigation';
 
 interface ProfilePageProps {
@@ -8,63 +8,87 @@ interface ProfilePageProps {
   currentPage: string;
 }
 
+interface ProfileData {
+  username: string;
+  symptoms: string[];
+  topicsOfInterest: string[];
+  designPreferences: {
+    colorAndContrast?: {
+      user_preferences: string[];
+      guideline_considerations: string[];
+      balanced_recommendations: string[];
+      confidence_level: 'high' | 'medium' | 'low';
+    };
+    familiarityAndIdentity?: {
+      user_preferences: string[];
+      guideline_considerations: string[];
+      balanced_recommendations: string[];
+      confidence_level: 'high' | 'medium' | 'low';
+    };
+    overallSummary?: string;
+  } | null;
+}
+
 function ProfilePage({ onNavigate, currentPage }: ProfilePageProps) {
   const [isSideNavOpen, setIsSideNavOpen] = useState(false);
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'struggles' | 'topics'>('struggles');
 
-  // Mock user data - in a real app, this would come from an API or context
-  const userProfile = {
-    username: "Sarah Johnson",
-    email: "sarah.j@email.com",
-    joinDate: "January 2024",
-    avatarColor: "bg-gradient-to-r from-purple-400 to-blue-400",
-    
-    // Symptoms (from questionnaire)
-    symptoms: [
-      { id: 1, name: "Memory Loss", severity: "Moderate", frequency: "Daily" },
-      { id: 2, name: "Confusion", severity: "Mild", frequency: "Weekly" },
-      { id: 3, name: "Difficulty Concentrating", severity: "Moderate", frequency: "Daily" },
-      { id: 4, name: "Word Finding", severity: "Mild", frequency: "Occasional" },
-    ],
-    
-    // Likes (from conversations)
-    likes: [
-      "Gardening and plants",
-      "Classical music",
-      "Morning walks in the park",
-      "Baking cookies",
-      "Reading mystery novels",
-      "Spending time with grandchildren",
-    ],
-    
-    // Dislikes (from conversations)
-    dislikes: [
-      "Loud noises",
-      "Crowded places",
-      "Fast-paced TV shows",
-      "Spicy food",
-      "Being rushed",
-    ],
-    
-    // Activity preferences (selected topics)
-    preferredActivities: [
-      "Reminiscing about family",
-      "Discussing past travels",
-      "Music memories",
-      "Life stories sharing",
-    ],
-    
-    // Memory bot usage stats
-    usageStats: {
-      conversations: 24,
-      memoryStories: 12,
-      favoriteTopics: 3,
-      totalHours: 8.5,
-    }
-  };
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        const userAuth = localStorage.getItem('userAuth');
+        if (!userAuth) {
+          setError('User not authenticated');
+          setLoading(false);
+          return;
+        }
+
+        const { token } = JSON.parse(userAuth);
+        const response = await fetch('/api/auth/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile data');
+        }
+
+        const data = await response.json();
+        setProfileData(data);
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfileData();
+  }, []);
 
   const toggleSideNav = () => {
     setIsSideNavOpen(!isSideNavOpen);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-lightpurple-to-lightblue flex items-center justify-center">
+        <div className="text-dark-grey text-xl">Loading profile...</div>
+      </div>
+    );
+  }
+
+  if (error || !profileData) {
+    return (
+      <div className="min-h-screen bg-gradient-lightpurple-to-lightblue flex items-center justify-center">
+        <div className="text-red text-xl">{error || 'Failed to load profile'}</div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -92,213 +116,158 @@ function ProfilePage({ onNavigate, currentPage }: ProfilePageProps) {
         </div>
 
         {/* Main Content */}
-        <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 px-4 md:px-6 py-4">
-          {/* Left Column - User Info Card */}
-          <div className="lg:w-1/3">
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 mb-6 border border-white/30"
-            >
-              {/* Avatar & Basic Info */}
-              <div className="flex flex-col items-center mb-6">
-                <div className={`w-24 h-24 rounded-full ${userProfile.avatarColor} flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-lg`}>
-                  {userProfile.username.charAt(0)}
-                </div>
-                <h1 className="text-2xl font-bold text-dark-grey mb-1">
-                  {userProfile.username}
-                </h1>
-                <p className="text-muted-purple mb-3">{userProfile.email}</p>
-                <div className="text-sm text-dark-grey/70 bg-light-purple/50 px-3 py-1 rounded-full border border-light-purple/30">
-                  Member since {userProfile.joinDate}
-                </div>
+        <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 px-4 md:px-6 py-4">
+          {/* User Info Card */}
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-white/30"
+          >
+            {/* Avatar & Basic Info */}
+            <div className="flex flex-col items-center">
+              <div className="w-28 h-28 rounded-full bg-gradient-to-r from-purple-400 to-blue-400 flex items-center justify-center text-white text-4xl font-bold mb-4 shadow-lg">
+                {profileData.username.charAt(0).toUpperCase()}
               </div>
+              <h1 className="text-3xl font-bold text-dark-grey">
+                {profileData.username}
+              </h1>
+            </div>
+          </motion.div>
 
-              {/* Usage Stats */}
-              <div className="border-t border-gray-200/50 pt-6">
-                <h3 className="text-lg font-semibold text-dark-grey mb-4">
-                  Memory Bot Usage
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-light-purple/40 rounded-xl border border-light-purple/50">
-                    <div className="text-2xl font-bold text-dark-purple">
-                      {userProfile.usageStats.conversations}
-                    </div>
-                    <div className="text-sm text-dark-grey">Conversations</div>
-                  </div>
-                  <div className="text-center p-3 bg-light-blue/40 rounded-xl border border-light-blue/50">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {userProfile.usageStats.memoryStories}
-                    </div>
-                    <div className="text-sm text-dark-grey">Memory Stories</div>
-                  </div>
-                  <div className="text-center p-3 bg-pink/30 rounded-xl border border-pink/40">
-                    <div className="text-2xl font-bold text-pink-600">
-                      {userProfile.usageStats.favoriteTopics}
-                    </div>
-                    <div className="text-sm text-dark-grey">Favorite Topics</div>
-                  </div>
-                  <div className="text-center p-3 bg-green/30 rounded-xl border border-green/40">
-                    <div className="text-2xl font-bold text-green-600">
-                      {userProfile.usageStats.totalHours}h
-                    </div>
-                    <div className="text-sm text-dark-grey">Total Time</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Preferred Activities */}
-              <div className="border-t border-gray-200/50 pt-6">
-                <h3 className="text-lg font-semibold text-dark-grey mb-3">
-                  Preferred Activities
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {userProfile.preferredActivities.map((activity, index) => (
-                    <span
-                      key={index}
-                      className="px-3 py-1.5 bg-gradient-to-r from-light-purple to-light-blue text-dark-purple rounded-full text-sm font-medium border border-purple/20"
-                    >
-                      {activity}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Right Column - Symptoms, Likes, Dislikes */}
-          <div className="lg:w-2/3 space-y-6">
-            {/* Symptoms Card */}
+          {/* Toggleable Carousel - Symptoms and Topics */}
+          {(profileData.symptoms.length > 0 || profileData.topicsOfInterest.length > 0) && (
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/30"
+              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-white/30"
             >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-dark-grey">
-                  Symptoms & Challenges
-                </h2>
-                <span className="px-3 py-1 bg-red/20 text-red rounded-full text-sm font-medium border border-red/30">
-                  {userProfile.symptoms.length} symptoms
-                </span>
+              {/* Toggle Buttons */}
+              <div className="flex gap-3 mb-6">
+                <button
+                  onClick={() => setActiveTab('struggles')}
+                  className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
+                    activeTab === 'struggles'
+                      ? 'bg-red/20 text-dark-grey border-2 border-red/40'
+                      : 'bg-gray-100 text-dark-grey/60 border-2 border-transparent'
+                  }`}
+                >
+                  What I Struggle With
+                </button>
+                <button
+                  onClick={() => setActiveTab('topics')}
+                  className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all ${
+                    activeTab === 'topics'
+                      ? 'bg-purple/20 text-dark-grey border-2 border-purple/40'
+                      : 'bg-gray-100 text-dark-grey/60 border-2 border-transparent'
+                  }`}
+                >
+                  Things I Like to Talk About
+                </button>
               </div>
-              
-              <div className="space-y-4">
-                {userProfile.symptoms.map((symptom) => (
-                  <div
-                    key={symptom.id}
-                    className="flex items-center justify-between p-4 bg-gradient-to-r from-red/10 to-orange/10 rounded-xl border border-red/20 hover:shadow-sm transition-shadow"
+
+              {/* Content Area */}
+              <div className="min-h-[200px]">
+                {activeTab === 'struggles' && profileData.symptoms.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                    className="grid gap-3"
                   >
-                    <div>
-                      <h4 className="font-medium text-dark-grey">{symptom.name}</h4>
-                      <div className="flex items-center gap-4 mt-2">
-                        <span className="text-sm text-dark-grey">
-                          <span className="font-medium">Severity:</span> {symptom.severity}
-                        </span>
-                        <span className="text-sm text-dark-grey">
-                          <span className="font-medium">Frequency:</span> {symptom.frequency}
-                        </span>
+                    {profileData.symptoms.map((symptom, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-4 p-4 bg-red/5 rounded-xl border border-red/20"
+                      >
+                        <div className="w-3 h-3 bg-red rounded-full flex-shrink-0"></div>
+                        <span className="text-dark-grey text-lg">{symptom}</span>
                       </div>
-                    </div>
-                    <div className="flex items-center">
-                      {symptom.severity === "Moderate" && (
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-6 bg-dark-yellow rounded-full"></div>
-                          <div className="w-2 h-6 bg-dark-yellow rounded-full"></div>
-                          <div className="w-2 h-4 bg-gray-300 rounded-full"></div>
-                        </div>
-                      )}
-                      {symptom.severity === "Mild" && (
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-6 bg-green-500 rounded-full"></div>
-                          <div className="w-2 h-4 bg-gray-300 rounded-full"></div>
-                          <div className="w-2 h-4 bg-gray-300 rounded-full"></div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="mt-6 pt-6 border-t border-gray-200/50">
-                <p className="text-sm text-dark-grey/70">
-                  These symptoms were identified through your initial assessment and ongoing conversations with Memory Bot.
-                </p>
+                    ))}
+                  </motion.div>
+                )}
+
+                {activeTab === 'topics' && profileData.topicsOfInterest.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex flex-wrap gap-3"
+                  >
+                    {profileData.topicsOfInterest.map((topic, index) => (
+                      <span
+                        key={index}
+                        className="px-5 py-3 bg-gradient-to-r from-light-purple to-light-blue text-dark-purple rounded-full text-lg font-medium border border-purple/20"
+                      >
+                        {topic}
+                      </span>
+                    ))}
+                  </motion.div>
+                )}
               </div>
             </motion.div>
+          )}
 
-            {/* Likes & Dislikes Card */}
+          {/* Design Preferences Card */}
+          {profileData.designPreferences && (
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/30"
+              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-white/30"
             >
-              <h2 className="text-xl font-bold text-dark-grey mb-6">
-                Personal Preferences
+              <h2 className="text-2xl font-bold text-dark-grey mb-6">
+                My Design Preferences
               </h2>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Likes */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 bg-green/30 rounded-lg flex items-center justify-center border border-green/40">
-                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-semibold text-dark-grey">
-                      Likes & Interests
-                    </h3>
-                  </div>
-                  <ul className="space-y-3">
-                    {userProfile.likes.map((like, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <span className="text-dark-grey">{like}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
 
-                {/* Dislikes */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 bg-red/30 rounded-lg flex items-center justify-center border border-red/40">
-                      <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667v-5.43a2 2 0 00-1.106-1.79l-.05-.025A4 4 0 0011.055 2H5.64a2 2 0 00-1.962 1.608l-1.2 6A2 2 0 004.44 12H8v4a2 2 0 002 2 1 1 0 001-1v-.667a4 4 0 01.8-2.4l1.4-1.866a4 4 0 00.8-2.4z" />
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-semibold text-dark-grey">
-                      Dislikes & Sensitivities
-                    </h3>
-                  </div>
-                  <ul className="space-y-3">
-                    {userProfile.dislikes.map((dislike, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-red rounded-full mt-2 flex-shrink-0"></div>
-                        <span className="text-dark-grey">{dislike}</span>
-                      </li>
+              {/* Simplified Color Preferences */}
+              {profileData.designPreferences.colorAndContrast?.user_preferences &&
+               profileData.designPreferences.colorAndContrast.user_preferences.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-xl font-semibold text-dark-grey mb-4 flex items-center gap-2">
+                    <span className="text-2xl">🎨</span>
+                    Colors I Prefer
+                  </h3>
+                  <div className="space-y-3">
+                    {profileData.designPreferences.colorAndContrast.user_preferences.map((pref, index) => (
+                      <div key={index} className="flex items-start gap-4 p-4 bg-purple/5 rounded-xl">
+                        <div className="w-3 h-3 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <span className="text-dark-grey text-lg">{pref}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="mt-6 pt-6 border-t border-gray-200/50">
-                <p className="text-sm text-dark-grey/70">
-                  These preferences are gathered from your conversations to help personalize your Memory Bot experience.
-                </p>
-              </div>
+              {/* Simplified Familiarity Preferences */}
+              {profileData.designPreferences.familiarityAndIdentity?.user_preferences &&
+               profileData.designPreferences.familiarityAndIdentity.user_preferences.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-semibold text-dark-grey mb-4 flex items-center gap-2">
+                    <span className="text-2xl">🏠</span>
+                    Spaces That Feel Like Home
+                  </h3>
+                  <div className="space-y-3">
+                    {profileData.designPreferences.familiarityAndIdentity.user_preferences.map((pref, index) => (
+                      <div key={index} className="flex items-start gap-4 p-4 bg-blue/5 rounded-xl">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <span className="text-dark-grey text-lg">{pref}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
-          </div>
+          )}
         </div>
       </motion.div>
 
       {/* Side Navigation */}
-      <SideNavigation 
-        isOpen={isSideNavOpen} 
+      <SideNavigation
+        isOpen={isSideNavOpen}
         onClose={() => setIsSideNavOpen(false)}
         currentPage={currentPage}
         onNavigate={onNavigate}
