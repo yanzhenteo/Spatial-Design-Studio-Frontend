@@ -39,9 +39,9 @@ function ToggleQuestionnaire({
 
       // If trying to select more than maxSelections allows
       if (maxSelections && selectedCount >= maxSelections) {
-        // Remove the first (oldest) selected item
+        // Remove the first (oldest) selected item and add the new one
         const firstSelectedId = selectionOrder[0];
-        setSelectionOrder(prevOrder => prevOrder.slice(1));
+        setSelectionOrder(prevOrder => [...prevOrder.slice(1), id]);
 
         return prev.map(q => {
           if (q.id === id) {
